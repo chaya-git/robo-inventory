@@ -1,0 +1,270 @@
+<!doctype html>
+<html>
+  <head>
+    <title>RoboManthan Login</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="loginBox">
+      <h1>🤖 RoboManthan Inventory</h1>
+
+      <div class="password-container">
+        <input type="password" id="adminPass" placeholder="Admin Password" />
+
+        <button
+          type="button"
+          id="toggleAdminPass"
+          onclick="toggleAdminPassword()"
+        >
+          👁️
+        </button>
+      </div>
+
+      <button onclick="loginAdmin()">Login as Admin</button>
+
+      <button onclick="openCustomerModal()">Continue as Customer</button>
+    </div>
+    <script src="config.js"></script>
+    <script>
+      function toggleAdminPassword() {
+        const input = document.getElementById("adminPass");
+        const btn = document.getElementById("toggleAdminPass");
+
+        if (input.type === "password") {
+          input.type = "text";
+          btn.textContent = "🙈";
+        } else {
+          input.type = "password";
+          btn.textContent = "👁️";
+        }
+      }
+      async function loginAdmin() {
+        let pass = document.getElementById("adminPass").value;
+
+        let response = await fetch(`${API_URL}/login`, {
+          method: "POST",
+
+          headers: {
+            "Content-Type": "application/json",
+          },
+
+          body: JSON.stringify({
+            password: pass,
+          }),
+        });
+
+        let result = await response.json();
+
+        if (result.role === "admin") {
+          if (result.token) localStorage.setItem("token", result.token);
+          localStorage.setItem("role", "admin");
+          window.location.href = "index.html";
+        } else {
+          alert("Wrong Password");
+        }
+      }
+      function toggleCustomerPassword() {
+        const input = document.getElementById("custPassword");
+        const btn = document.getElementById("toggleCustPass");
+
+        if (input.type === "password") {
+          input.type = "text";
+          btn.textContent = "🙈";
+        } else {
+          input.type = "password";
+          btn.textContent = "👁️";
+        }
+      }
+
+      function toggleSignupPassword() {
+        const input = document.getElementById("signupPassword");
+        const btn = document.getElementById("toggleSignupPass");
+
+        if (input.type === "password") {
+          input.type = "text";
+          btn.textContent = "🙈";
+        } else {
+          input.type = "password";
+          btn.textContent = "👁️";
+        }
+      }
+      function openCustomerModal() {
+        const m = document.getElementById("customerModal");
+        if (m) m.style.display = "flex";
+      }
+
+      function closeCustomerModal() {
+        const m = document.getElementById("customerModal");
+        if (m) m.style.display = "none";
+      }
+
+      async function customerSignIn() {
+        const email = document.getElementById("custEmail").value.trim();
+        const password = document.getElementById("custPassword").value;
+        if (!email || !password) return alert("Enter email and password");
+        const resp = await fetch(`${API_URL}/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        });
+        const result = await resp.json();
+        if (result && result.success && result.role) {
+          if (result.token) localStorage.setItem("token", result.token);
+          if (result.role === "admin") localStorage.setItem("role", "admin");
+          else localStorage.setItem("role", "customer");
+          // fetch /me to obtain email and exact role
+          try {
+            const me = await fetch(`${API_URL}/me`, {
+              headers: { Authorization: "Bearer " + (result.token || "") },
+            });
+            const meJson = await me.json();
+            if (meJson && meJson.success && meJson.user) {
+              localStorage.setItem("userEmail", meJson.user.email || "");
+              // store exact role
+              localStorage.setItem(
+                "role",
+                meJson.user.role || result.role || "customer",
+              );
+            }
+          } catch (e) {
+            console.warn("Could not fetch /me", e);
+          }
+          window.location.href = "index.html";
+        } else {
+          alert(result.message || "Invalid credentials");
+        }
+      }
+
+      async function customerSignUp() {
+        const name = document.getElementById("signupName").value.trim();
+        const email = document.getElementById("signupEmail").value.trim();
+        const password = document.getElementById("signupPassword").value;
+        if (!name || !email || !password)
+          return alert("Please fill all fields");
+        const resp = await fetch(`${API_URL}/customerSignup`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, email, password }),
+        });
+        const res = await resp.json();
+        if (res.success) {
+          if (res.token) localStorage.setItem("token", res.token);
+          localStorage.setItem("role", res.role || "customer");
+          localStorage.setItem("userEmail", email);
+          window.location.href = "index.html";
+        } else {
+          alert(res.message || "Could not create account");
+        }
+      }
+
+      // Local notification helpers (align with index page storage)
+      function getNotificationsLocal() {
+        try {
+          return JSON.parse(localStorage.getItem("notifications") || "[]");
+        } catch (e) {
+          return [];
+        }
+      }
+      function saveNotificationsLocal(arr) {
+        localStorage.setItem("notifications", JSON.stringify(arr));
+      }
+      function addNotificationLocal(msg) {
+        const arr = getNotificationsLocal();
+        arr.unshift({
+          id: Date.now(),
+          msg,
+          read: false,
+          ts: new Date().toISOString(),
+        });
+        saveNotificationsLocal(arr);
+        renderLoginNotifications();
+      }
+      function renderLoginNotifications() {
+        const box = document.getElementById("loginNotifications");
+        if (!box) return;
+        const arr = getNotificationsLocal();
+        if (arr.length === 0) {
+          box.innerHTML = "";
+          return;
+        }
+        let html = "";
+        arr
+          .slice(0, 5)
+          .forEach(
+            (n) =>
+              (html += `<div class="notif-item ${n.read ? "" : "unread"}"><div>${n.msg}</div><div class="time">${new Date(n.ts).toLocaleString()}</div></div>`),
+          );
+        box.innerHTML = html;
+      }
+      // render any existing notifications in modal if open
+      document.addEventListener("DOMContentLoaded", () => {
+        renderLoginNotifications();
+      });
+    </script>
+  </body>
+  <!-- Customer modal -->
+  <div
+    id="customerModal"
+    class="modal"
+    style="display: none; align-items: center; justify-content: center"
+  >
+    <div class="modal-content" style="width: 420px">
+      <span class="close" onclick="closeCustomerModal()">&times;</span>
+      <h2>Welcome</h2>
+      <div id="loginNotifications" style="margin-bottom: 8px"></div>
+      <div style="display: flex; gap: 12px; margin-bottom: 12px">
+        <button
+          onclick="
+            document.getElementById('signinBox').style.display = 'block';
+            document.getElementById('signupBox').style.display = 'none';
+          "
+        >
+          Sign In
+        </button>
+        <button
+          onclick="
+            document.getElementById('signinBox').style.display = 'none';
+            document.getElementById('signupBox').style.display = 'block';
+          "
+        >
+          Sign Up
+        </button>
+      </div>
+      <div id="signinBox" style="display: block">
+        <input id="custEmail" placeholder="Email" />
+        <div class="password-container">
+          <input id="custPassword" placeholder="Password" type="password" />
+
+          <button
+            type="button"
+            id="toggleCustPass"
+            onclick="toggleCustomerPassword()"
+          >
+            👁️
+          </button>
+        </div>
+        <div style="margin-top: 10px">
+          <button onclick="customerSignIn()">Sign In</button>
+        </div>
+      </div>
+      <div id="signupBox" style="display: none">
+        <input id="signupName" placeholder="Full Name" />
+        <input id="signupEmail" placeholder="Email" />
+        <div class="password-container">
+          <input id="signupPassword" placeholder="Password" type="password" />
+
+          <button
+            type="button"
+            id="toggleSignupPass"
+            onclick="toggleSignupPassword()"
+          >
+            👁️
+          </button>
+        </div>
+        <div style="margin-top: 10px">
+          <button onclick="customerSignUp()">Sign Up</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</html>

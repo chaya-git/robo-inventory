@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Damaged Products Report</title>
+
+    <link rel="stylesheet" href="damaged-report.css" />
+  </head>
+
+  <body>
+    <div class="header">
+      <button onclick="goBack()">← Back</button>
+
+      <h1>Damaged Products Report</h1>
+    </div>
+
+    <!-- ALL TIME DAMAGE SUMMARY -->
+
+    <h2>All-Time Damage Summary</h2>
+
+    <div id="damagedTableContainer">Loading...</div>
+
+    <!-- MONTHLY DAMAGE REPORT -->
+
+    <h2>Monthly Damage Report</h2>
+
+    <div class="controls">
+      <select id="monthFilter">
+        <option value="">Select Month</option>
+      </select>
+
+      <button id="downloadExcelBtn">Download Excel</button>
+    </div>
+
+    <div id="monthlyTableContainer">Select a month to view report</div>
+    <script src="config.js"></script>
+    <script src="damaged-report.js"></script>
+  </body>
+</html>

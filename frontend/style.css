@@ -1,0 +1,543 @@
+body {
+  font-family: Arial, sans-serif;
+
+  margin: 0;
+
+  padding: 20px;
+
+  background: #f2f3f5;
+
+  transition: 0.3s;
+}
+
+.navbar {
+  display: flex;
+
+  justify-content: space-between;
+
+  align-items: center;
+
+  padding: 15px;
+
+  background: #131921;
+
+  color: white;
+
+  border-radius: 10px;
+
+  margin-bottom: 25px;
+}
+
+h2 {
+  margin-top: 40px;
+}
+
+.products {
+  display: flex;
+
+  flex-wrap: wrap;
+
+  gap: 25px;
+
+  justify-content: center;
+}
+#issueFormContainer {
+  display: none;
+}
+/* Compact list layout for product/component lists */
+.products.list {
+  display: block;
+  gap: 0;
+}
+#products {
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 25px;
+}
+
+.products.list .card {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  width: 100%;
+  padding: 12px;
+  gap: 16px;
+  box-sizing: border-box;
+}
+
+.products.list .card img {
+  width: 100px;
+  height: 100px;
+}
+
+.products.list .card h3 {
+  margin: 0 0 6px 0;
+}
+
+.products.list .card p {
+  margin: 4px 0;
+}
+
+@media (max-width: 600px) {
+  .products.list .card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .products.list .card img {
+    width: 100%;
+    height: 180px;
+  }
+}
+
+/* Dashboard statistics cards (placed above search) */
+#dashboard {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+  justify-content: flex-start;
+}
+
+#dashboard .card {
+  width: 220px;
+  padding: 20px;
+}
+
+.card {
+  width: 280px;
+
+  background: white;
+
+  padding: 15px;
+
+  border-radius: 15px;
+
+  box-shadow: 0px 3px 12px rgba(0, 0, 0, 0.15);
+
+  transition: 0.3s;
+}
+
+.card:hover {
+  transform: translateY(-8px);
+}
+
+.card img {
+  width: 180px;
+
+  height: 180px;
+
+  display: block;
+
+  margin: auto;
+
+  object-fit: contain;
+}
+
+.admin-critical {
+  border: 3px solid #ff4d4d !important;
+  background: rgba(255, 77, 77, 0.08);
+}
+
+.admin-low {
+  border: 3px solid #ffb84d !important;
+  background: rgba(255, 184, 77, 0.08);
+}
+
+.admin-healthy {
+  border: 3px solid #4caf50 !important;
+  background: rgba(76, 175, 80, 0.08);
+}
+
+button {
+  padding: 10px;
+
+  border: none;
+
+  border-radius: 8px;
+
+  cursor: pointer;
+
+  background: #ff9900;
+
+  font-weight: bold;
+
+  margin: 5px;
+}
+
+button:hover {
+  background: #e68a00;
+}
+
+input {
+  padding: 10px;
+
+  margin: 8px;
+
+  border-radius: 8px;
+
+  border: 1px solid gray;
+
+  width: 250px;
+}
+
+#issueForm {
+  background: white;
+
+  padding: 20px;
+
+  border-radius: 15px;
+
+  box-shadow: 0px 3px 10px rgba(0, 0, 0, 0.15);
+}
+
+.dark {
+  background: #121212;
+
+  color: white;
+}
+
+.dark .card {
+  background: #1e1e1e;
+
+  color: white;
+}
+
+.dark #issueForm {
+  background: #1e1e1e;
+}
+
+.dark .navbar {
+  background: black;
+}
+.searchBox {
+  display: flex;
+  justify-content: center;
+  margin: 20px;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.searchBox input {
+  width: 500px;
+  max-width: 100%;
+  padding: 15px;
+  font-size: 16px;
+  border-radius: 30px;
+  border: none;
+  box-shadow: 0px 2px 10px rgba(0, 0, 0, 0.2);
+  box-sizing: border-box;
+}
+.low {
+  color: orange;
+
+  font-weight: bold;
+}
+
+.critical {
+  color: red;
+
+  font-weight: bold;
+}
+
+.healthy {
+  color: green;
+
+  font-weight: bold;
+}
+
+select {
+  padding: 10px;
+  margin: 8px;
+  border-radius: 8px;
+  border: 1px solid gray;
+  width: 270px;
+}
+
+.workshopTitle {
+  color: #ffb74d;
+}
+
+.projectTitle {
+  color: #64b5f6;
+}
+
+/* Overrides to ensure list-style cards render correctly */
+.products.list .card img {
+  width: 100px !important;
+  height: 100px !important;
+  object-fit: contain;
+  margin: 0 12px 0 0;
+}
+
+.products.list .card {
+  align-items: center;
+}
+
+.products.list .card .card-info {
+  flex: 1;
+}
+
+.products.list .card .card-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-left: 12px;
+}
+
+/* Make dashboard cards visually similar but slightly larger */
+#dashboard .card h3 {
+  margin: 0 0 8px 0;
+}
+
+/* Modal */
+.modal {
+  position: fixed;
+  z-index: 1000;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  background-color: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.modal-content {
+  background-color: #fff;
+  padding: 20px;
+  border-radius: 10px;
+  width: 420px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+.damaged-modal {
+  /* allow a wider modal for tables, but constrain to viewport */
+  max-width: 900px;
+  width: min(95vw, 900px);
+}
+
+/* Damaged products table responsiveness */
+.damaged-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed; /* keep layout stable and prevent overflow */
+}
+.damaged-table th,
+.damaged-table td {
+  padding: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.damaged-table td img {
+  width: 56px;
+  height: 36px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+.damaged-table th:nth-child(1),
+.damaged-table td:nth-child(1) {
+  width: 10%;
+}
+.damaged-table th:nth-child(2),
+.damaged-table td:nth-child(2) {
+  width: 25%;
+}
+.damaged-table th:nth-child(2),
+.damaged-table td:nth-child(2) {
+  white-space: normal;
+}
+.damaged-table th:nth-child(3),
+.damaged-table td:nth-child(3) {
+  width: 12%;
+}
+.damaged-table th:nth-child(4),
+.damaged-table td:nth-child(4) {
+  width: 12%;
+}
+.damaged-table th:nth-child(5),
+.damaged-table td:nth-child(5) {
+  width: 12%;
+}
+.damaged-table th:nth-child(6),
+.damaged-table td:nth-child(6) {
+  width: 12%;
+}
+.damaged-table th:nth-child(7),
+.damaged-table td:nth-child(7) {
+  width: 7%;
+}
+
+@media (max-width: 600px) {
+  .damaged-table th,
+  .damaged-table td {
+    white-space: normal;
+  }
+  .damaged-table img {
+    width: 48px;
+    height: 28px;
+  }
+}
+.modal .close {
+  float: right;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+#activeSession {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+#activeSession .label {
+  background: #fff;
+  padding: 12px 16px;
+  border-radius: 12px;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.08);
+}
+#activeSession .actions button {
+  margin-left: 8px;
+}
+
+/* Notifications */
+.notif-bell {
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  margin-right: 8px;
+  cursor: pointer;
+}
+.notif-bell .notif-count {
+  display: inline-block;
+  background: #ff9900;
+  color: #fff;
+  border-radius: 10px;
+  padding: 2px 6px;
+  margin-left: 6px;
+  font-weight: bold;
+  font-size: 12px;
+}
+.notif-dropdown {
+  color: black;
+  position: absolute;
+  right: 20px;
+  top: 70px;
+  width: 320px;
+  max-height: 360px;
+  overflow: auto;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.15);
+  padding: 12px;
+  z-index: 2000;
+}
+.notif-item {
+  padding: 8px 6px;
+  border-bottom: 1px solid #eee;
+}
+.notif-item.unread {
+  background: #f7fbff;
+}
+.notif-item .time {
+  color: #666;
+  font-size: 12px;
+}
+.notif-actions {
+  margin-top: 8px;
+  text-align: right;
+}
+.notif-actions button {
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.password-container {
+  position: relative;
+  display: inline-block;
+}
+
+.password-container input {
+  padding-right: 45px;
+}
+
+.password-container button {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 18px;
+}
+
+@media (max-width: 768px) {
+
+  body {
+    padding: 10px;
+  }
+
+  .navbar {
+    flex-direction: column;
+    text-align: center;
+    gap: 15px;
+  }
+
+  .searchBox {
+    flex-direction: column;
+    margin: 10px 0;
+  }
+
+  .searchBox input {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  #products {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px;
+  }
+
+  .card {
+    width: auto;
+    padding: 10px;
+  }
+
+  .card img {
+    width: 100px;
+    height: 100px;
+  }
+
+  .card h3 {
+    font-size: 14px;
+  }
+
+  .card p {
+    font-size: 12px;
+  }
+
+  button {
+    font-size: 12px;
+    padding: 8px;
+  }
+
+  #dashboard {
+    justify-content: center;
+  }
+
+  #dashboard .card {
+    width: 100%;
+    max-width: 280px;
+  }
+
+  .modal-content {
+    width: 95vw;
+  }
+
+  /* Prevent accidental horizontal scrolling */
+  html,
+  body {
+    overflow-x: hidden;
+  }
+}

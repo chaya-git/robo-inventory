@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <title>RoboManthan Inventory</title>
+
+    <link rel="stylesheet" href="style.css" />
+  </head>
+
+  <body>
+    <div class="navbar">
+      <h1>🤖 RoboManthan Inventory</h1>
+
+      <div>
+        <button id="modeBtn" onclick="toggleMode()">🌙 Dark Mode</button>
+        <button
+          id="notificationsBtn"
+          class="notif-bell"
+          onclick="toggleNotifications()"
+        >
+          🔔
+          <span id="notifCount" class="notif-count"> 0 </span>
+        </button>
+        <div
+          id="notificationsDropdown"
+          class="notif-dropdown"
+          style="display: none"
+        ></div>
+
+        <button onclick="logout()">Logout</button>
+      </div>
+    </div>
+
+    <!-- Damaged Products Modal -->
+    <div id="damagedModal" class="modal" style="display: none">
+      <div class="modal-content damaged-modal" style="width: min(95vw, 900px)">
+        <span id="closeDamagedModal" class="close">&times;</span>
+        <h3>Damaged Products</h3>
+        <div id="damagedModalBody">
+          <div id="damagedTableContainer">Loading...</div>
+        </div>
+      </div>
+    </div>
+    <!-- Stock Receiving Modal -->
+    <div id="stockReceiveModal" class="modal" style="display: none">
+      <div class="modal-content">
+        <span
+          class="close"
+          onclick="document.getElementById('stockReceiveModal').style.display = 'none'"
+          >&times;</span
+        >
+        <h3>Receive Stock</h3>
+
+        <label>Component</label>
+        <select id="receiveProduct"></select>
+
+        <label>Quantity Received</label>
+        <input type="number" id="receiveQty" min="1" />
+
+        <label>Supplier</label>
+        <input type="text" id="receiveSupplier" placeholder="Supplier name" />
+
+        <label>Invoice Number</label>
+        <input type="text" id="receiveInvoice" placeholder="Invoice #" />
+
+        <label>Received By</label>
+        <input type="text" id="receiveBy" placeholder="Name" />
+
+        <label>Date</label>
+        <input type="date" id="receiveDate" />
+
+        <label>Remarks</label>
+        <input type="text" id="receiveRemarks" placeholder="Optional notes" />
+
+        <div style="margin-top: 12px">
+          <button onclick="submitStockReceive()">Add Stock</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Reports Modal -->
+    <div id="reportsModal" class="modal" style="display: none">
+      <div class="modal-content damaged-modal" style="width: min(95vw, 900px)">
+        <span
+          class="close"
+          onclick="document.getElementById('reportsModal').style.display = 'none'"
+          >&times;</span
+        >
+        <h3>Reports</h3>
+
+        <label>Report Period</label>
+        <select id="reportPeriodType" onchange="onReportPeriodChange()">
+          <option value="daily">Daily</option>
+          <option value="weekly" selected>Weekly</option>
+          <option value="monthly">Monthly</option>
+          <option value="custom">Custom</option>
+        </select>
+
+        <div id="customReportRange" style="display: none; margin-top: 8px">
+          <label>Start Date</label>
+          <input type="date" id="reportStartDate" />
+          <label>End Date</label>
+          <input type="date" id="reportEndDate" />
+        </div>
+
+        <div style="margin-top: 12px">
+          <button onclick="downloadReportFile('pdf')">
+            Download Weekly Report (PDF)
+          </button>
+          <button onclick="downloadReportFile('excel')" style="margin-left: 8px">
+            Download Excel
+          </button>
+        </div>
+
+        <h3 style="margin-top: 20px">Previously Generated Reports</h3>
+        <div id="oldReportsContainer">Loading...</div>
+      </div>
+    </div>
+
+    <!-- Audit Log Modal -->
+    <div id="auditLogModal" class="modal" style="display: none">
+      <div class="modal-content damaged-modal" style="width: min(95vw, 900px)">
+        <span
+          class="close"
+          onclick="document.getElementById('auditLogModal').style.display = 'none'"
+          >&times;</span
+        >
+        <h3>Audit Log</h3>
+        <div id="auditLogContainer">Loading...</div>
+      </div>
+    </div>
+
+    <div id="dashboard" class="products"></div>
+
+    <div id="legacyAdminSection">
+    <div class="searchBox">
+      <input
+        type="text"
+        id="searchId"
+        placeholder="🔍 Search by Product ID"
+        onkeyup="searchById()"
+      />
+
+      <input
+        type="text"
+        id="searchName"
+        placeholder="🔍 Search by Product Name"
+        onkeyup="searchByName()"
+      />
+    </div>
+    <h2>Products</h2>
+
+    <div class="products list" id="products"></div>
+    <br />
+    <div id="activeSession" style="margin: 16px 0"></div>
+    <!-- Issue Modal -->
+    <div id="issueModal" class="modal" style="display: none">
+      <div class="modal-content">
+        <span id="closeModal" class="close">&times;</span>
+        <h3 id="modalTitle">Issue Component</h3>
+        <div id="modalBody">
+          <label>Issue Type</label>
+          <select id="issueTypeSelect">
+            <option value="Testing">Testing</option>
+            <option value="Workshop">Workshop</option>
+            <option value="Project">Project</option>
+          </select>
+          <div
+            id="testingDurationContainer"
+            style="display: none; margin-top: 10px"
+          >
+            <label> Testing Duration (Days) </label>
+
+            <input
+              id="testingDuration"
+              type="number"
+              min="1"
+              placeholder="Enter duration in days"
+            />
+          </div>
+          <div id="employeeDetails" style="display: none">
+            <input
+              id="sessionEmpIds"
+              placeholder="Employee IDs (comma-separated)"
+            />
+            <input
+              id="sessionEmpNames"
+              placeholder="Employee Names (comma-separated)"
+            />
+          </div>
+
+          <div id="sessionDetails" style="display: none">
+            <input id="sessionName" placeholder="Workshop/Project Name" />
+            <input id="sessionVenue" placeholder="Venue" />
+          </div>
+
+          <div id="qtyBox" style="margin-top: 8px">
+            <input id="issueQty" type="number" min="1" placeholder="Quantity" />
+          </div>
+
+          <div style="margin-top: 12px">
+            <button id="modalActionBtn">Confirm</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="returnModal" class="modal" style="display: none">
+      <div class="modal-content">
+        <span id="closeReturnModal" class="close">&times;</span>
+        <h3 id="returnModalTitle">Return Components</h3>
+        <div id="returnModalBody">
+          <div id="returnComponentsList"></div>
+          <div style="margin-top: 12px">
+            <button id="confirmReturnBtn">Process Return</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin: 12px 0">
+      <button
+        id="damagedBtn"
+        style="
+          font-size: 1.12em;
+          padding: 14px 20px;
+          display: none;
+          border-radius: 8px;
+        "
+        onclick="openDamagedPage()"
+      >
+        Damaged Products
+      </button>
+      <button
+        id="stockReceiveBtn"
+        style="
+          font-size: 1.12em;
+          padding: 14px 20px;
+          display: none;
+          border-radius: 8px;
+          margin-left: 8px;
+        "
+        onclick="openStockReceiveModal()"
+      >
+        Receive Stock
+      </button>
+      <button
+        id="reportsBtn"
+        style="
+          font-size: 1.12em;
+          padding: 14px 20px;
+          display: none;
+          border-radius: 8px;
+          margin-left: 8px;
+        "
+        onclick="openReportsModal()"
+      >
+        Reports
+      </button>
+      <button
+        id="auditLogBtn"
+        style="
+          font-size: 1.12em;
+          padding: 14px 20px;
+          display: none;
+          border-radius: 8px;
+          margin-left: 8px;
+        "
+        onclick="openAuditLogModal()"
+      >
+        Audit Log
+      </button>
+      <button
+        id="adminTransactionsBtn"
+        style="
+          font-size: 1.12em;
+          padding: 14px 20px;
+          display: none;
+          border-radius: 8px;
+          margin-left: 8px;
+        "
+        onclick="openAdminTransactionsModal()"
+      >
+        Transactions
+      </button>
+    </div>
+    <!-- <h2>Components Selected</h2> -->
+
+    <!-- <div class="products list" id="projectList"></div> -->
+
+    <!-- <h2>Component Issue Form</h2> -->
+    <div id="issueFormContainer">
+      <div id="issueForm">
+        <input id="empIds" placeholder="Employee IDs" />
+
+        <input id="empNames" placeholder="Employee Names" />
+
+        <input id="projectName" placeholder="Workshop/Project Name" />
+
+        <input id="venue" placeholder="Venue" />
+
+        <input type="date" id="date" />
+        <select id="issueType" onchange="toggleIssueFields()">
+          <option value="Workshop">Workshop</option>
+          <option value="Project">Project</option>
+          <option value="Testing">Testing</option>
+        </select>
+        <!-- <button onclick="issueComponents()">Issue Components</button> -->
+        <!-- <button onclick="returnComponent()">Return Components</button> -->
+      </div>
+    </div>
+    <br />
+    <br />
+    <button onclick="downloadReport()">Download Report</button>
+    <br />
+    <br />
+    <button id="addProductBtn" onclick="showAddProductForm()">
+      Add Product
+    </button>
+    <br />
+    <div id="addProductForm" style="display: none">
+      <input id="newName" placeholder="Product Name" />
+
+      <input id="newModel" placeholder="Model" />
+
+      <input id="newPrice" placeholder="Price" />
+
+      <input id="newStock" placeholder="Stock" />
+
+      <input id="newImage" placeholder="Image URL" />
+
+      <input id="newRack" placeholder="Rack Number" />
+
+      <input id="newDescription" placeholder="Description" />
+
+      <button onclick="addProduct()">Save Product</button>
+    </div>
+    <br />
+    <input
+      type="text"
+      id="employeeHistorySearch"
+      placeholder="Search Employee Name..."
+      onkeyup="searchEmployeeHistory()"
+      style="width: 400px"
+    />
+    <br />
+    <h2 class="workshopTitle">Workshop History</h2>
+
+    <div id="workshopHistory" class="products"></div>
+
+    <h2 class="projectTitle">Project History</h2>
+
+    <div id="projectHistory" class="products"></div>
+
+    <h2 class="testingTitle">Testing History</h2>
+
+    <div id="testingHistory" class="products"></div>
+    </div>
+
+    <!-- ===== Direct Issue/Return Workflow ===== -->
+
+    <!-- Customer: Components grid -->
+    <div id="componentsSection" style="display: none; margin-top: 24px">
+      <h2>Components</h2>
+      <div id="componentsGrid" class="products list">Loading...</div>
+    </div>
+
+    <!-- Customer: My Transactions -->
+    <div id="myTransactionsSection" style="display: none; margin-top: 24px">
+      <h2>My Transactions</h2>
+      <div id="myTransactionsContainer">Loading...</div>
+    </div>
+
+    <!-- Take Component Modal (customer) -->
+    <div id="takeComponentModal" class="modal" style="display: none">
+      <div class="modal-content">
+        <span class="close" onclick="closeTakeComponentModal()">&times;</span>
+        <h3 id="takeComponentTitle">Take Component</h3>
+
+        <label>Name</label>
+        <input id="takeComponentName" placeholder="Your name" />
+
+        <label>Project Name</label>
+        <input id="takeComponentProject" placeholder="Project name" />
+
+        <label>Purpose</label>
+        <input id="takeComponentPurpose" placeholder="Purpose" />
+
+        <label>Number of Components Required</label>
+        <input id="takeComponentQty" type="number" min="1" value="1" />
+
+        <label>Rack Number</label>
+        <input id="takeComponentRack" readonly />
+
+        <label>Issue Date</label>
+        <input id="takeComponentDate" readonly />
+
+        <div id="takeComponentError" style="color: #c0392b; margin-top: 8px"></div>
+
+        <div style="margin-top: 12px">
+          <button onclick="submitTakeComponent()">Take Component</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Admin Transactions Modal -->
+    <div id="adminTransactionsModal" class="modal" style="display: none">
+      <div class="modal-content damaged-modal" style="width: min(95vw, 1000px)">
+        <span
+          class="close"
+          onclick="document.getElementById('adminTransactionsModal').style.display = 'none'"
+          >&times;</span
+        >
+        <h3>Transactions</h3>
+
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px">
+          <input id="txSearchCustomer" placeholder="Customer name" onkeyup="loadAdminTransactions()" />
+          <input id="txSearchComponent" placeholder="Component name" onkeyup="loadAdminTransactions()" />
+          <input id="txSearchProject" placeholder="Project name" onkeyup="loadAdminTransactions()" />
+          <select id="txSearchStatus" onchange="loadAdminTransactions()">
+            <option value="">All statuses</option>
+            <option value="Issued">Issued</option>
+            <option value="Returned">Returned</option>
+          </select>
+        </div>
+
+        <div id="adminTransactionsContainer">Loading...</div>
+      </div>
+    </div>
+
+    <script src="config.js"></script>
+    <script src="script.js"></script>
+  </body>
+</html>
