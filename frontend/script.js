@@ -1389,6 +1389,8 @@ function checkRole() {
   if (alb) alb.style.display = isAdmin ? "inline-block" : "none";
   const atb = document.getElementById("adminTransactionsBtn");
   if (atb) atb.style.display = isAdmin ? "inline-block" : "none";
+  const ecb = document.getElementById("ecommerceNavBtn");
+  if (ecb) ecb.style.display = isAdmin ? "inline-block" : "none";
 
   const componentsSection = document.getElementById("componentsSection");
   if (componentsSection) componentsSection.style.display = isAdmin ? "none" : "block";
@@ -2101,3 +2103,277 @@ function openAuditLogModal() {
 // Load the extra dashboard cards once on startup (role-gated data is fine
 // to fetch for employees too -- they just won't see the admin-only buttons)
 loadDashboardExtras();
+
+/* =========================================================================
+   E-COMMERCE MODULE: Amazon / Flipkart stock-received, sold, return, and
+   adjustment transactions. Fully separate view from the general inventory
+   pages above -- only calls the new /ecommerce/* backend routes and never
+   touches the existing product/issue/return data or DOM sections.
+   ========================================================================= */
+
+let ecomEditingTransactionId = null; // null = adding a new transaction
+
+function openEcommercePage() {
+  document.getElementById("dashboard").style.display = "none";
+  const legacySection = document.getElementById("legacyAdminSection");
+  if (legacySection) legacySection.style.display = "none";
+  const componentsSection = document.getElementById("componentsSection");
+  if (componentsSection) componentsSection.style.display = "none";
+  const myTransactionsSection = document.getElementById("myTransactionsSection");
+  if (myTransactionsSection) myTransactionsSection.style.display = "none";
+
+  document.getElementById("ecommerceSection").style.display = "block";
+
+  loadEcommerceSummary();
+  loadEcommerceTransactions();
+}
+
+function closeEcommercePage() {
+  document.getElementById("ecommerceSection").style.display = "none";
+  document.getElementById("dashboard").style.display = "";
+  checkRole();
+}
+
+async function loadEcommerceSummary() {
+  const container = document.getElementById("ecommerceSummaryCards");
+  if (!container) return;
+  try {
+    const res = await fetch(`${API_URL}/ecommerce/summary`, { headers: authHeaders() });
+    const data = await res.json();
+    if (!data.success) {
+      container.innerHTML = "<p>Failed to load summary.</p>";
+      return;
+    }
+    const s = data.summary;
+    container.innerHTML = `
+      <div class="card"><h3>Total Amazon Stock</h3><p>${s.totalAmazonStock}</p></div>
+      <div class="card"><h3>Total Flipkart Stock</h3><p>${s.totalFlipkartStock}</p></div>
+      <div class="card"><h3>Amazon Stock Received</h3><p>${s.amazonStockReceived}</p></div>
+      <div class="card"><h3>Flipkart Stock Received</h3><p>${s.flipkartStockReceived}</p></div>
+      <div class="card"><h3>Amazon Units Sold</h3><p>${s.amazonUnitsSold}</p></div>
+      <div class="card"><h3>Flipkart Units Sold</h3><p>${s.flipkartUnitsSold}</p></div>
+      <div class="card"><h3>Total E-Commerce Sales</h3><p>₹${Number(s.totalEcommerceSales).toLocaleString("en-IN")}</p></div>
+    `;
+  } catch (err) {
+    console.error("Failed to load e-commerce summary", err);
+    container.innerHTML = "<p>Failed to load summary.</p>";
+  }
+}
+
+async function loadEcommerceTransactions() {
+  const container = document.getElementById("ecommerceTransactionsContainer");
+  if (!container) return;
+  container.innerHTML = "Loading...";
+  try {
+    const params = new URLSearchParams();
+    const platform = document.getElementById("ecomPlatformFilter")?.value;
+    const transactionType = document.getElementById("ecomTypeFilter")?.value;
+    const search = document.getElementById("ecomSearch")?.value.trim();
+    if (platform) params.set("platform", platform);
+    if (transactionType) params.set("transactionType", transactionType);
+    if (search) params.set("search", search);
+
+    const res = await fetch(`${API_URL}/ecommerce/transactions?${params.toString()}`, {
+      headers: authHeaders(),
+    });
+    const data = await res.json();
+    if (!data.success || data.transactions.length === 0) {
+      container.innerHTML = "<p>No E-Commerce transactions found.</p>";
+      return;
+    }
+
+    let html = `<table style="width:100%;border-collapse:collapse">
+      <thead><tr>
+        <th>Date</th><th>Platform</th><th>Type</th><th>Product</th><th>SKU</th>
+        <th>Qty</th><th>Unit Price</th><th>Total Amount</th><th>Reference/Order ID</th><th>Actions</th>
+      </tr></thead><tbody>`;
+    data.transactions.forEach((t) => {
+      html += `<tr>
+        <td>${new Date(t.transactionDate).toLocaleDateString()}</td>
+        <td>${t.platform}</td>
+        <td>${t.transactionType}${t.transactionType === "Adjustment" && t.adjustmentDirection ? " (" + t.adjustmentDirection + ")" : ""}</td>
+        <td>${t.productName}</td>
+        <td>${t.sku}</td>
+        <td>${t.quantity}</td>
+        <td>₹${Number(t.unitPrice).toLocaleString("en-IN")}</td>
+        <td>₹${Number(t.totalAmount).toLocaleString("en-IN")}</td>
+        <td>${t.referenceNumber || ""}</td>
+        <td>
+          <button onclick="openEcommerceTransactionModal(${t.transactionId})">Edit</button>
+          <button onclick="deleteEcommerceTransaction(${t.transactionId})">Delete</button>
+        </td>
+      </tr>`;
+    });
+    html += "</tbody></table>";
+    container.innerHTML = html;
+  } catch (err) {
+    console.error("Failed to load e-commerce transactions", err);
+    container.innerHTML = "<p>Error loading transactions.</p>";
+  }
+}
+async function downloadEcommerceExcel() {
+  try {
+    const params = new URLSearchParams();
+    const platform = document.getElementById("ecomPlatformFilter")?.value;
+    const transactionType = document.getElementById("ecomTypeFilter")?.value;
+    const search = document.getElementById("ecomSearch")?.value.trim();
+    if (platform) params.set("platform", platform);
+    if (transactionType) params.set("transactionType", transactionType);
+    if (search) params.set("search", search);
+
+    const res = await fetch(`${API_URL}/ecommerce/transactions/export?${params.toString()}`, {
+      headers: authHeaders(),
+    });
+    if (!res.ok) {
+      alert("Failed to download Excel file.");
+      return;
+    }
+    const blob = await res.blob();
+    const disposition = res.headers.get("Content-Disposition") || "";
+    const match = disposition.match(/filename="?([^"]+)"?/);
+    const fileName = match ? match[1] : "Ecommerce_Transactions.xlsx";
+
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  } catch (err) {
+    console.error("Failed to download e-commerce Excel", err);
+    alert("Failed to download Excel file.");
+  }
+}
+function onEcomTxTypeChange() {
+  const type = document.getElementById("ecomTxType").value;
+  document.getElementById("ecomAdjustmentDirectionContainer").style.display =
+    type === "Adjustment" ? "block" : "none";
+  document.getElementById("ecomUnitPriceLabel").textContent =
+    type === "Sold" ? "Selling Price (per unit)" : "Purchase/Stock Cost (per unit)";
+  document.getElementById("ecomRefLabel").textContent =
+    type === "Sold" ? "Order ID / Invoice Number" : "Invoice/Reference Number";
+}
+
+function onEcomTxProductChange() {
+  const select = document.getElementById("ecomTxProduct");
+  const skuInput = document.getElementById("ecomTxSku");
+  if (select.value && !skuInput.value) {
+    skuInput.placeholder = `Defaults to ${select.value}`;
+  }
+}
+
+async function openEcommerceTransactionModal(transactionId) {
+  ecomEditingTransactionId = transactionId || null;
+  document.getElementById("ecomModalTitle").textContent = ecomEditingTransactionId
+    ? "Edit E-Commerce Transaction"
+    : "Add E-Commerce Transaction";
+
+  const productSelect = document.getElementById("ecomTxProduct");
+  productSelect.innerHTML = "";
+  try {
+    const res = await fetch(`${API_URL}/products`);
+    const prods = await res.json();
+    prods.forEach((p) => {
+      productSelect.innerHTML += `<option value="${p.productId}">${p.name}</option>`;
+    });
+  } catch (err) {
+    console.error("Failed to load products for e-commerce transaction", err);
+  }
+
+  // Reset fields
+  document.getElementById("ecomTxPlatform").value = "Amazon";
+  document.getElementById("ecomTxType").value = "Stock Received";
+  document.getElementById("ecomTxAdjustmentDirection").value = "increase";
+  document.getElementById("ecomTxSku").value = "";
+  document.getElementById("ecomTxQty").value = "";
+  document.getElementById("ecomTxUnitPrice").value = "";
+  document.getElementById("ecomTxRef").value = "";
+  document.getElementById("ecomTxNotes").value = "";
+  document.getElementById("ecomTxDate").value = new Date().toISOString().slice(0, 10);
+
+  if (ecomEditingTransactionId) {
+    try {
+      const res = await fetch(`${API_URL}/ecommerce/transactions`, { headers: authHeaders() });
+      const data = await res.json();
+      const tx = data.transactions?.find((t) => t.transactionId === ecomEditingTransactionId);
+      if (tx) {
+        document.getElementById("ecomTxPlatform").value = tx.platform;
+        document.getElementById("ecomTxType").value = tx.transactionType;
+        document.getElementById("ecomTxProduct").value = tx.productId;
+        document.getElementById("ecomTxSku").value = tx.sku;
+        document.getElementById("ecomTxQty").value = tx.quantity;
+        document.getElementById("ecomTxAdjustmentDirection").value = tx.adjustmentDirection || "increase";
+        document.getElementById("ecomTxUnitPrice").value = tx.unitPrice;
+        document.getElementById("ecomTxRef").value = tx.referenceNumber || "";
+        document.getElementById("ecomTxNotes").value = tx.notes || "";
+        document.getElementById("ecomTxDate").value = new Date(tx.transactionDate).toISOString().slice(0, 10);
+      }
+    } catch (err) {
+      console.error("Failed to load transaction for editing", err);
+    }
+  }
+
+  onEcomTxTypeChange();
+  document.getElementById("ecommerceTransactionModal").style.display = "flex";
+}
+
+function closeEcommerceTransactionModal() {
+  document.getElementById("ecommerceTransactionModal").style.display = "none";
+  ecomEditingTransactionId = null;
+}
+
+async function submitEcommerceTransaction() {
+  const payload = {
+    platform: document.getElementById("ecomTxPlatform").value,
+    transactionType: document.getElementById("ecomTxType").value,
+    productId: document.getElementById("ecomTxProduct").value,
+    sku: document.getElementById("ecomTxSku").value,
+    quantity: document.getElementById("ecomTxQty").value,
+    adjustmentDirection: document.getElementById("ecomTxAdjustmentDirection").value,
+    unitPrice: document.getElementById("ecomTxUnitPrice").value,
+    referenceNumber: document.getElementById("ecomTxRef").value,
+    date: document.getElementById("ecomTxDate").value,
+    notes: document.getElementById("ecomTxNotes").value,
+  };
+
+  try {
+    const url = ecomEditingTransactionId
+      ? `${API_URL}/ecommerce/transactions/${ecomEditingTransactionId}`
+      : `${API_URL}/ecommerce/transactions`;
+    const method = ecomEditingTransactionId ? "PUT" : "POST";
+    const res = await fetch(url, { method, headers: authHeaders(), body: JSON.stringify(payload) });
+    const result = await res.json();
+    alert(result.message);
+    if (result.success) {
+      closeEcommerceTransactionModal();
+      await loadEcommerceSummary();
+      await loadEcommerceTransactions();
+      await loadProducts();
+    }
+  } catch (err) {
+    console.error("Failed to save e-commerce transaction", err);
+    alert("Failed to save transaction. Please try again.");
+  }
+}
+
+async function deleteEcommerceTransaction(transactionId) {
+  if (!confirm("Delete this E-Commerce transaction? This cannot be undone.")) return;
+  try {
+    const res = await fetch(`${API_URL}/ecommerce/transactions/${transactionId}`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+    const result = await res.json();
+    alert(result.message);
+    if (result.success) {
+      await loadEcommerceSummary();
+      await loadEcommerceTransactions();
+      await loadProducts();
+    }
+  } catch (err) {
+    console.error("Failed to delete e-commerce transaction", err);
+    alert("Failed to delete transaction. Please try again.");
+  }
+}
