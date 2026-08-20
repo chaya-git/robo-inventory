@@ -1902,6 +1902,515 @@ app.get("/audit", authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
+/* =========================================================================
+   E-COMMERCE MODULE: Amazon / Flipkart stock-received, sold, return, and
+   adjustment transactions. Kept strictly separate from the general
+   inventory/issue/return flows above -- the only thing shared is the
+   `products` table (reused for SKU/name/stock, per the existing structure),
+   which these routes keep in sync via `products.stock`.
+   ========================================================================= */
+
+// Effect on products.stock for each transaction type. Stock Received and
+// Return add stock back in (goods coming into our inventory); Sold removes
+// it (goods leaving to fulfil an Amazon/Flipkart order). Adjustment can go
+// either way, based on adjustment_direction.
+function ecommerceStockDelta(transactionType, quantity, adjustmentDirection) {
+  const qty = Number(quantity);
+  switch (transactionType) {
+    case "Stock Received":
+    case "Return":
+      return qty;
+    case "Sold":
+      return -qty;
+    case "Adjustment":
+      return adjustmentDirection === "decrease" ? -qty : qty;
+    default:
+      return 0;
+  }
+}
+
+const ECOMMERCE_PLATFORMS = ["Amazon", "Flipkart"];
+const ECOMMERCE_TYPES = ["Stock Received", "Sold", "Return", "Adjustment"];
+
+// Dashboard summary cards
+app.get("/ecommerce/summary", authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        platform,
+        transaction_type AS "transactionType",
+        adjustment_direction AS "adjustmentDirection",
+        quantity,
+        total_amount AS "totalAmount"
+      FROM ecommerce_transactions
+    `);
+
+    const summary = {
+      totalAmazonStock: 0,
+      totalFlipkartStock: 0,
+      amazonStockReceived: 0,
+      flipkartStockReceived: 0,
+      amazonUnitsSold: 0,
+      flipkartUnitsSold: 0,
+      totalEcommerceSales: 0,
+    };
+
+    for (const row of result.rows) {
+      const qty = Number(row.quantity);
+      const delta = ecommerceStockDelta(row.transactionType, qty, row.adjustmentDirection);
+      const isAmazon = row.platform === "Amazon";
+
+      if (isAmazon) summary.totalAmazonStock += delta;
+      else summary.totalFlipkartStock += delta;
+
+      if (row.transactionType === "Stock Received") {
+        if (isAmazon) summary.amazonStockReceived += qty;
+        else summary.flipkartStockReceived += qty;
+      }
+      if (row.transactionType === "Sold") {
+        if (isAmazon) summary.amazonUnitsSold += qty;
+        else summary.flipkartUnitsSold += qty;
+        summary.totalEcommerceSales += Number(row.totalAmount) || 0;
+      }
+    }
+
+    res.json({ success: true, summary });
+  } catch (err) {
+    console.error("Error in GET /ecommerce/summary", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+// List transactions, with platform / type / search filtering
+app.get("/ecommerce/transactions", authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { platform, transactionType, search } = req.query;
+    const conditions = [];
+    const params = [];
+
+    if (platform && ECOMMERCE_PLATFORMS.includes(platform)) {
+      params.push(platform);
+      conditions.push(`et.platform = $${params.length}`);
+    }
+    if (transactionType && ECOMMERCE_TYPES.includes(transactionType)) {
+      params.push(transactionType);
+      conditions.push(`et.transaction_type = $${params.length}`);
+    }
+    if (search && String(search).trim()) {
+      params.push(`%${String(search).trim()}%`);
+      const idx = params.length;
+      conditions.push(
+        `(p.name ILIKE $${idx} OR et.sku ILIKE $${idx} OR et.reference_number ILIKE $${idx})`,
+      );
+    }
+
+    const whereClause = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+
+    const result = await pool.query(
+      `
+      SELECT
+        et.transaction_id AS "transactionId",
+        et.platform,
+        et.transaction_type AS "transactionType",
+        et.product_id AS "productId",
+        p.name AS "productName",
+        et.sku,
+        et.quantity,
+        et.adjustment_direction AS "adjustmentDirection",
+        et.unit_price AS "unitPrice",
+        et.total_amount AS "totalAmount",
+        et.reference_number AS "referenceNumber",
+        et.transaction_date AS "transactionDate",
+        et.notes,
+        et.created_by_email AS "createdByEmail",
+        et.created_at AS "createdAt",
+        et.updated_at AS "updatedAt"
+      FROM ecommerce_transactions et
+      JOIN products p ON p.product_id = et.product_id
+      ${whereClause}
+      ORDER BY et.transaction_date DESC, et.transaction_id DESC
+      `,
+      params,
+    );
+
+    res.json({ success: true, transactions: result.rows });
+  } catch (err) {
+    console.error("Error in GET /ecommerce/transactions", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+// Create an E-Commerce transaction (Stock Received / Sold / Return / Adjustment)
+// and apply its effect to the shared products.stock inventory.
+app.post("/ecommerce/transactions", authenticateToken, requireAdmin, async (req, res) => {
+  const {
+    platform,
+    transactionType,
+    productId,
+    sku,
+    quantity,
+    adjustmentDirection,
+    unitPrice,
+    referenceNumber,
+    date,
+    notes,
+  } = req.body || {};
+
+  if (!ECOMMERCE_PLATFORMS.includes(platform)) {
+    return res.status(400).json({ success: false, message: "Platform must be Amazon or Flipkart." });
+  }
+  if (!ECOMMERCE_TYPES.includes(transactionType)) {
+    return res.status(400).json({ success: false, message: "Invalid transaction type." });
+  }
+  const qty = Number(quantity);
+  if (!productId || !Number.isInteger(qty) || qty <= 0) {
+    return res.status(400).json({ success: false, message: "Product and a positive quantity are required." });
+  }
+  if (transactionType === "Adjustment" && !["increase", "decrease"].includes(adjustmentDirection)) {
+    return res.status(400).json({ success: false, message: "Adjustment requires a direction (increase/decrease)." });
+  }
+
+  const price = Number(unitPrice) || 0;
+  const totalAmount = price * qty;
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const prodRes = await client.query(
+      `SELECT product_id, name, stock FROM products WHERE product_id = $1 FOR UPDATE`,
+      [productId],
+    );
+    if (prodRes.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ success: false, message: "Product not found." });
+    }
+    const product = prodRes.rows[0];
+
+    const delta = ecommerceStockDelta(transactionType, qty, adjustmentDirection);
+    if (Number(product.stock) + delta < 0) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ success: false, message: "Not enough stock available for this transaction." });
+    }
+
+    await client.query(`UPDATE products SET stock = stock + $1 WHERE product_id = $2`, [delta, productId]);
+
+    const inserted = await client.query(
+      `
+      INSERT INTO ecommerce_transactions
+        (platform, transaction_type, product_id, sku, quantity, adjustment_direction,
+         unit_price, total_amount, reference_number, transaction_date, notes, created_by_email)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,COALESCE($10, CURRENT_DATE),$11,$12)
+      RETURNING transaction_id AS "transactionId"
+      `,
+      [
+        platform,
+        transactionType,
+        productId,
+        sku && String(sku).trim() ? String(sku).trim() : String(productId),
+        qty,
+        transactionType === "Adjustment" ? adjustmentDirection : null,
+        price,
+        totalAmount,
+        referenceNumber || null,
+        date || null,
+        notes || null,
+        req.user ? req.user.email : null,
+      ],
+    );
+
+    await client.query("COMMIT");
+
+    await logAudit(pool, {
+      actorEmail: req.user ? req.user.email : null,
+      actorRole: req.user ? req.user.role : null,
+      action: "ECOMMERCE_TRANSACTION_CREATED",
+      description: `${platform} ${transactionType}: ${qty} x ${product.name}${referenceNumber ? " (Ref " + referenceNumber + ")" : ""}`,
+      metadata: { platform, transactionType, productId, quantity: qty, referenceNumber },
+    });
+
+    res.json({ success: true, message: "Transaction recorded successfully.", transactionId: inserted.rows[0].transactionId });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("Error in POST /ecommerce/transactions", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  } finally {
+    client.release();
+  }
+});
+
+// Edit a transaction. Reverses the old stock effect and applies the new one
+// so products.stock stays correct no matter what changed.
+app.put("/ecommerce/transactions/:id", authenticateToken, requireAdmin, async (req, res) => {
+  const transactionId = Number(req.params.id);
+  const {
+    platform,
+    transactionType,
+    productId,
+    sku,
+    quantity,
+    adjustmentDirection,
+    unitPrice,
+    referenceNumber,
+    date,
+    notes,
+  } = req.body || {};
+
+  if (!ECOMMERCE_PLATFORMS.includes(platform)) {
+    return res.status(400).json({ success: false, message: "Platform must be Amazon or Flipkart." });
+  }
+  if (!ECOMMERCE_TYPES.includes(transactionType)) {
+    return res.status(400).json({ success: false, message: "Invalid transaction type." });
+  }
+  const qty = Number(quantity);
+  if (!productId || !Number.isInteger(qty) || qty <= 0) {
+    return res.status(400).json({ success: false, message: "Product and a positive quantity are required." });
+  }
+  if (transactionType === "Adjustment" && !["increase", "decrease"].includes(adjustmentDirection)) {
+    return res.status(400).json({ success: false, message: "Adjustment requires a direction (increase/decrease)." });
+  }
+
+  const price = Number(unitPrice) || 0;
+  const totalAmount = price * qty;
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const txRes = await client.query(
+      `SELECT * FROM ecommerce_transactions WHERE transaction_id = $1 FOR UPDATE`,
+      [transactionId],
+    );
+    if (txRes.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ success: false, message: "Transaction not found." });
+    }
+    const oldTx = txRes.rows[0];
+
+    // Lock both the old and new product rows (they may be the same row).
+    const productIds = [...new Set([oldTx.product_id, Number(productId)])];
+    const prodRes = await client.query(
+      `SELECT product_id, name, stock FROM products WHERE product_id = ANY($1::int[]) FOR UPDATE`,
+      [productIds],
+    );
+    const productsById = Object.fromEntries(prodRes.rows.map((p) => [p.product_id, p]));
+    if (!productsById[productId]) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ success: false, message: "Product not found." });
+    }
+
+    // Reverse the old effect on the old product.
+    const oldDelta = ecommerceStockDelta(oldTx.transaction_type, oldTx.quantity, oldTx.adjustment_direction);
+    await client.query(`UPDATE products SET stock = stock - $1 WHERE product_id = $2`, [oldDelta, oldTx.product_id]);
+
+    // Apply the new effect on the new product, re-checking stock won't go negative.
+    const newDelta = ecommerceStockDelta(transactionType, qty, adjustmentDirection);
+    const baselineStock =
+      Number(productsById[productId].stock) - (oldTx.product_id === Number(productId) ? oldDelta : 0);
+    if (baselineStock + newDelta < 0) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ success: false, message: "Not enough stock available for this transaction." });
+    }
+    await client.query(`UPDATE products SET stock = stock + $1 WHERE product_id = $2`, [newDelta, productId]);
+
+    await client.query(
+      `
+      UPDATE ecommerce_transactions SET
+        platform = $1,
+        transaction_type = $2,
+        product_id = $3,
+        sku = $4,
+        quantity = $5,
+        adjustment_direction = $6,
+        unit_price = $7,
+        total_amount = $8,
+        reference_number = $9,
+        transaction_date = COALESCE($10, transaction_date),
+        notes = $11,
+        updated_at = NOW()
+      WHERE transaction_id = $12
+      `,
+      [
+        platform,
+        transactionType,
+        productId,
+        sku && String(sku).trim() ? String(sku).trim() : String(productId),
+        qty,
+        transactionType === "Adjustment" ? adjustmentDirection : null,
+        price,
+        totalAmount,
+        referenceNumber || null,
+        date || null,
+        notes || null,
+        transactionId,
+      ],
+    );
+
+    await client.query("COMMIT");
+
+    await logAudit(pool, {
+      actorEmail: req.user ? req.user.email : null,
+      actorRole: req.user ? req.user.role : null,
+      action: "ECOMMERCE_TRANSACTION_UPDATED",
+      description: `Updated ${platform} ${transactionType} transaction #${transactionId}`,
+      metadata: { transactionId, platform, transactionType, productId, quantity: qty },
+    });
+
+    res.json({ success: true, message: "Transaction updated successfully." });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("Error in PUT /ecommerce/transactions/:id", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  } finally {
+    client.release();
+  }
+});
+
+// Delete a transaction and reverse its effect on inventory.
+app.delete("/ecommerce/transactions/:id", authenticateToken, requireAdmin, async (req, res) => {
+  const transactionId = Number(req.params.id);
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const txRes = await client.query(
+      `SELECT * FROM ecommerce_transactions WHERE transaction_id = $1 FOR UPDATE`,
+      [transactionId],
+    );
+    if (txRes.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ success: false, message: "Transaction not found." });
+    }
+    const tx = txRes.rows[0];
+
+    const delta = ecommerceStockDelta(tx.transaction_type, tx.quantity, tx.adjustment_direction);
+    await client.query(`UPDATE products SET stock = stock - $1 WHERE product_id = $2`, [delta, tx.product_id]);
+    await client.query(`DELETE FROM ecommerce_transactions WHERE transaction_id = $1`, [transactionId]);
+
+    await client.query("COMMIT");
+
+    await logAudit(pool, {
+      actorEmail: req.user ? req.user.email : null,
+      actorRole: req.user ? req.user.role : null,
+      action: "ECOMMERCE_TRANSACTION_DELETED",
+      description: `Deleted ${tx.platform} ${tx.transaction_type} transaction #${transactionId}`,
+      metadata: { transactionId, platform: tx.platform, transactionType: tx.transaction_type },
+    });
+
+    res.json({ success: true, message: "Transaction deleted successfully." });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("Error in DELETE /ecommerce/transactions/:id", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  } finally {
+    client.release();
+  }
+});
+// Export E-Commerce transactions (respects the same platform/type/search
+// filters as the list route) as an Excel file.
+app.get("/ecommerce/transactions/export", authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { platform, transactionType, search } = req.query;
+    const conditions = [];
+    const params = [];
+
+    if (platform && ECOMMERCE_PLATFORMS.includes(platform)) {
+      params.push(platform);
+      conditions.push(`et.platform = $${params.length}`);
+    }
+    if (transactionType && ECOMMERCE_TYPES.includes(transactionType)) {
+      params.push(transactionType);
+      conditions.push(`et.transaction_type = $${params.length}`);
+    }
+    if (search && String(search).trim()) {
+      params.push(`%${String(search).trim()}%`);
+      const idx = params.length;
+      conditions.push(
+        `(p.name ILIKE $${idx} OR et.sku ILIKE $${idx} OR et.reference_number ILIKE $${idx})`,
+      );
+    }
+
+    const whereClause = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+
+    const result = await pool.query(
+      `
+      SELECT
+        et.transaction_date AS "transactionDate",
+        et.platform,
+        et.transaction_type AS "transactionType",
+        et.adjustment_direction AS "adjustmentDirection",
+        p.name AS "productName",
+        et.sku,
+        et.quantity,
+        et.unit_price AS "unitPrice",
+        et.total_amount AS "totalAmount",
+        et.reference_number AS "referenceNumber",
+        et.notes,
+        et.created_by_email AS "createdByEmail"
+      FROM ecommerce_transactions et
+      JOIN products p ON p.product_id = et.product_id
+      ${whereClause}
+      ORDER BY et.transaction_date DESC, et.transaction_id DESC
+      `,
+      params,
+    );
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("E-Commerce Transactions");
+
+    sheet.columns = [
+      { header: "Date", key: "date", width: 14 },
+      { header: "Platform", key: "platform", width: 12 },
+      { header: "Transaction Type", key: "type", width: 20 },
+      { header: "Product", key: "product", width: 30 },
+      { header: "SKU", key: "sku", width: 16 },
+      { header: "Quantity", key: "quantity", width: 12 },
+      { header: "Unit Price", key: "unitPrice", width: 14 },
+      { header: "Total Amount", key: "totalAmount", width: 16 },
+      { header: "Reference/Order ID", key: "reference", width: 20 },
+      { header: "Notes", key: "notes", width: 25 },
+      { header: "Recorded By", key: "recordedBy", width: 22 },
+    ];
+
+    sheet.getRow(1).font = { bold: true };
+    sheet.getRow(1).alignment = { horizontal: "center" };
+
+    result.rows.forEach((row) => {
+      sheet.addRow({
+        date: row.transactionDate ? new Date(row.transactionDate).toLocaleDateString() : "",
+        platform: row.platform,
+        type:
+          row.transactionType === "Adjustment" && row.adjustmentDirection
+            ? `${row.transactionType} (${row.adjustmentDirection})`
+            : row.transactionType,
+        product: row.productName,
+        sku: row.sku,
+        quantity: row.quantity,
+        unitPrice: Number(row.unitPrice),
+        totalAmount: Number(row.totalAmount),
+        reference: row.referenceNumber || "",
+        notes: row.notes || "",
+        recordedBy: row.createdByEmail || "",
+      });
+    });
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    );
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename=Ecommerce_Transactions_${new Date().toISOString().slice(0, 10)}.xlsx`,
+    );
+
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error("Error in GET /ecommerce/transactions/export", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+});
 // Start the automatic Sunday 11:59 PM weekly report job
 startWeeklyReportCron(pool);
 
