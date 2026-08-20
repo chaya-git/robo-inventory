@@ -14,6 +14,13 @@
       <h1>🤖 RoboManthan Inventory</h1>
 
       <div>
+        <button
+          id="ecommerceNavBtn"
+          style="display: none"
+          onclick="openEcommercePage()"
+        >
+          🛒 E-Commerce
+        </button>
         <button id="modeBtn" onclick="toggleMode()">🌙 Dark Mode</button>
         <button
           id="notificationsBtn"
@@ -427,6 +434,108 @@
         </div>
 
         <div id="adminTransactionsContainer">Loading...</div>
+      </div>
+    </div>
+
+    <!-- ===== E-Commerce (Amazon / Flipkart) Module ===== -->
+    <div id="ecommerceSection" style="display: none; margin-top: 24px">
+      <button onclick="closeEcommercePage()">← Back to Dashboard</button>
+      <h2>E-Commerce (Amazon &amp; Flipkart)</h2>
+
+      <div id="ecommerceSummaryCards" class="products"></div>
+
+      <div
+        style="
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+          margin: 12px 0;
+          align-items: center;
+        "
+      >
+        <select id="ecomPlatformFilter" onchange="loadEcommerceTransactions()">
+          <option value="">All Platforms</option>
+          <option value="Amazon">Amazon</option>
+          <option value="Flipkart">Flipkart</option>
+        </select>
+        <select id="ecomTypeFilter" onchange="loadEcommerceTransactions()">
+          <option value="">All Transactions</option>
+          <option value="Stock Received">Stock Received</option>
+          <option value="Sold">Sold</option>
+          <option value="Return">Return</option>
+          <option value="Adjustment">Adjustment</option>
+        </select>
+        <input
+          id="ecomSearch"
+          placeholder="🔍 Search product, SKU, order/invoice #"
+          onkeyup="loadEcommerceTransactions()"
+          style="flex: 1; min-width: 220px"
+        />
+                <button onclick="openEcommerceTransactionModal()">
+          + Add Transaction
+        </button>
+        <button onclick="downloadEcommerceExcel()">⬇ Download Excel</button>
+      </div>
+
+      <div id="ecommerceTransactionsContainer">Loading...</div>
+    </div>
+
+    <!-- Add/Edit E-Commerce Transaction Modal -->
+    <div id="ecommerceTransactionModal" class="modal" style="display: none">
+      <div class="modal-content">
+        <span class="close" onclick="closeEcommerceTransactionModal()"
+          >&times;</span
+        >
+        <h3 id="ecomModalTitle">Add E-Commerce Transaction</h3>
+
+        <label>Platform</label>
+        <select id="ecomTxPlatform">
+          <option value="Amazon">Amazon</option>
+          <option value="Flipkart">Flipkart</option>
+        </select>
+
+        <label>Transaction Type</label>
+        <select id="ecomTxType" onchange="onEcomTxTypeChange()">
+          <option value="Stock Received">Stock Received</option>
+          <option value="Sold">Sold</option>
+          <option value="Return">Return</option>
+          <option value="Adjustment">Adjustment</option>
+        </select>
+
+        <div id="ecomAdjustmentDirectionContainer" style="display: none">
+          <label>Adjustment Direction</label>
+          <select id="ecomTxAdjustmentDirection">
+            <option value="increase">Increase Stock</option>
+            <option value="decrease">Decrease Stock</option>
+          </select>
+        </div>
+
+        <label>Product</label>
+        <select id="ecomTxProduct" onchange="onEcomTxProductChange()"></select>
+
+        <label>SKU / Product ID</label>
+        <input id="ecomTxSku" placeholder="Defaults to product ID" />
+
+        <label>Quantity</label>
+        <input id="ecomTxQty" type="number" min="1" />
+
+        <label id="ecomUnitPriceLabel">Purchase/Stock Cost (per unit)</label>
+        <input id="ecomTxUnitPrice" type="number" min="0" step="0.01" />
+
+        <label>Date</label>
+        <input id="ecomTxDate" type="date" />
+
+        <label id="ecomRefLabel">Invoice/Reference Number</label>
+        <input id="ecomTxRef" placeholder="Invoice / Order ID" />
+
+        <label>Notes</label>
+        <input id="ecomTxNotes" placeholder="Optional notes" />
+
+        <div style="margin-top: 12px">
+          <button onclick="submitEcommerceTransaction()">
+            Save Transaction
+          </button>
+        </div>
       </div>
     </div>
 
