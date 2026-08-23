@@ -430,16 +430,4 @@ This project was developed during a Software Development Internship at RoboManth
 
 The project evolved from a basic inventory tracker into a workflow-driven inventory management platform capable of handling real inventory data, approval systems, stock tracking, damaged inventory management, and employee request workflows.
 
----
 
-## Author
-
-**Vatsal Narain**
-
-Software Development Intern
-RoboManthan
-
-Repository:
-https://github.com/Vatsal-Narain/Robomanthan-Inventory
-
----
