@@ -1747,7 +1747,7 @@ async function returnMyTransaction(transactionId) {
       otpMsg.textContent = "";
       return;
     }
-    otpMsg.textContent = "An OTP has been sent to the registered mobile number (+91 94480 39779). Enter it below to confirm the return.";
+    otpMsg.textContent = "An OTP has been sent to chayas008@gmail.com. Check your inbox and enter it below to confirm the return.";
   } catch (err) {
     console.error(err);
     otpError.textContent = "Server error. Please try again.";
@@ -1780,7 +1780,7 @@ async function resendOtp() {
       otpError.textContent = result.message || "Could not resend OTP.";
       otpMsg.textContent = "";
     } else {
-      otpMsg.textContent = "New OTP sent to the registered mobile number. Valid for 5 minutes.";
+      otpMsg.textContent = "New OTP sent to chayas008@gmail.com. Check your inbox. Valid for 5 minutes.";
     }
   } catch (err) {
     console.error(err);

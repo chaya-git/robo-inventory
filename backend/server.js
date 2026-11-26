@@ -1424,60 +1424,55 @@ app.get("/myTransactions", authenticateToken, async (req, res) => {
 const crypto = require("crypto");
 const otpStore = new Map(); // key: transactionId, value: { otp, expiresAt, userId }
 
-// Helper: send SMS via fast2sms (GET route - most reliable)
-async function sendSmsOtp(phone, otp) {
-  const FAST2SMS_KEY = process.env.FAST2SMS_API_KEY;
-  const cleanPhone = String(phone).replace(/\D/g, "").slice(-10);
-  const message = encodeURIComponent(
-    `Your RoboManthan return OTP is: ${otp}. Valid for 5 minutes. Do not share.`
-  );
+// Helper: send OTP via Gmail (free, no payment needed)
+async function sendOtpEmail(otp) {
+  const nodemailer = require("nodemailer");
 
-  if (!FAST2SMS_KEY) {
-    // No SMS key – print OTP to Render logs so admin can still verify manually
-    console.log(`\n========================================`);
-    console.log(`[OTP] Phone: ${cleanPhone} | OTP: ${otp}`);
-    console.log(`========================================\n`);
+  const GMAIL_USER = process.env.OTP_GMAIL_USER;   // your Gmail address
+  const GMAIL_PASS = process.env.OTP_GMAIL_PASS;   // Gmail App Password (16 chars)
+  const ADMIN_EMAIL = process.env.OTP_ADMIN_EMAIL || GMAIL_USER; // who receives the OTP
+
+  // Always log OTP to Render console as a fallback
+  console.log(`\n========================================`);
+  console.log(`[OTP] Code: ${otp} | To: ${ADMIN_EMAIL}`);
+  console.log(`========================================\n`);
+
+  if (!GMAIL_USER || !GMAIL_PASS) {
+    console.warn("[OTP] OTP_GMAIL_USER / OTP_GMAIL_PASS not set – OTP printed to logs only.");
     return { success: true, dev: true };
   }
 
   try {
-    const https = require("https");
-    const path = `/dev/bulkV2?route=q&message=${message}&language=english&flash=0&numbers=${cleanPhone}`;
-
-    return await new Promise((resolve, reject) => {
-      const req2 = https.request(
-        {
-          hostname: "www.fast2sms.com",
-          path,
-          method: "GET",
-          headers: {
-            authorization: FAST2SMS_KEY,
-            "cache-control": "no-cache",
-          },
-        },
-        (r) => {
-          let data = "";
-          r.on("data", (c) => (data += c));
-          r.on("end", () => {
-            try {
-              const parsed = JSON.parse(data);
-              console.log("Fast2SMS response:", JSON.stringify(parsed));
-              resolve(parsed);
-            } catch {
-              console.log("Fast2SMS raw response:", data);
-              resolve({ return: false, raw: data });
-            }
-          });
-        },
-      );
-      req2.on("error", (err) => {
-        console.error("Fast2SMS request error:", err.message);
-        resolve({ success: false, error: err.message });
-      });
-      req2.end();
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: GMAIL_USER,
+        pass: GMAIL_PASS,
+      },
     });
+
+    await transporter.sendMail({
+      from: `"RoboManthan Inventory" <${GMAIL_USER}>`,
+      to: ADMIN_EMAIL,
+      subject: `🔐 Return OTP: ${otp}`,
+      html: `
+        <div style="font-family:Arial,sans-serif;max-width:400px;margin:auto;border:1px solid #eee;border-radius:10px;padding:24px">
+          <h2 style="color:#131921;margin-bottom:4px">🤖 RoboManthan Inventory</h2>
+          <p style="color:#555;margin-top:0">Component Return Verification</p>
+          <hr style="border:none;border-top:1px solid #eee"/>
+          <p style="font-size:15px">Your OTP for returning a component is:</p>
+          <div style="background:#f7f7f7;border-radius:8px;padding:16px 24px;text-align:center;margin:16px 0">
+            <span style="font-size:36px;font-weight:bold;letter-spacing:10px;color:#ff9900">${otp}</span>
+          </div>
+          <p style="color:#888;font-size:13px">⏱ This OTP is valid for <b>5 minutes</b>. Do not share it.</p>
+        </div>
+      `,
+    });
+
+    console.log(`[OTP] Email sent successfully to ${ADMIN_EMAIL}`);
+    return { success: true };
   } catch (err) {
-    console.error("SMS send error:", err.message);
+    console.error("[OTP] Email send failed:", err.message);
     return { success: false, error: err.message };
   }
 }
@@ -1503,12 +1498,11 @@ app.post("/transactions/:id/return/request-otp", authenticateToken, async (req, 
     const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
     otpStore.set(transactionId, { otp, expiresAt, userId: req.user.id });
 
-    // Send to fixed admin/owner number
-    const RETURN_PHONE = process.env.RETURN_OTP_PHONE || "9448039779";
-    const smsResult = await sendSmsOtp(RETURN_PHONE, otp);
-    console.log("SMS send result:", JSON.stringify(smsResult));
+    // Send OTP via Gmail email
+    const smsResult = await sendOtpEmail(otp);
+    console.log("OTP send result:", JSON.stringify(smsResult));
 
-    res.json({ success: true, message: "OTP sent to the registered mobile number (+91 9448039779). Valid for 5 minutes." });
+    res.json({ success: true, message: "OTP sent to the registered email address (chayas008@gmail.com). Valid for 5 minutes." });
   } catch (err) {
     console.error("Error in /transactions/:id/return/request-otp", err);
     res.status(500).json({ success: false, message: "Server error" });
