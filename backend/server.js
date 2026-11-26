@@ -1430,7 +1430,8 @@ async function sendOtpEmail(otp) {
 
   const SMTP_USER = process.env.OTP_SMTP_USER || process.env.OTP_GMAIL_USER;
   const SMTP_PASS = process.env.OTP_SMTP_PASS || process.env.OTP_GMAIL_PASS;
-  const ADMIN_EMAIL = process.env.OTP_ADMIN_EMAIL || SMTP_USER;
+  const ADMIN_EMAIL = process.env.OTP_ADMIN_EMAIL || "chayas008@gmail.com";
+  const FROM_EMAIL = process.env.OTP_FROM_EMAIL || ADMIN_EMAIL;
   const SMTP_HOST = process.env.OTP_SMTP_HOST || "smtp-relay.brevo.com";
   const SMTP_PORT = Number(process.env.OTP_SMTP_PORT) || 587;
 
@@ -1456,7 +1457,7 @@ async function sendOtpEmail(otp) {
     });
 
     await transporter.sendMail({
-      from: `"RoboManthan Inventory" <${SMTP_USER}>`,
+      from: `"RoboManthan Inventory" <${FROM_EMAIL}>`,
       to: ADMIN_EMAIL,
       subject: `Return OTP: ${otp}`,
       html: `
