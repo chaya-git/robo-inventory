@@ -1424,45 +1424,56 @@ app.get("/myTransactions", authenticateToken, async (req, res) => {
 const crypto = require("crypto");
 const otpStore = new Map(); // key: transactionId, value: { otp, expiresAt, userId }
 
-// Helper: send SMS via fast2sms
+// Helper: send SMS via fast2sms (GET route - most reliable)
 async function sendSmsOtp(phone, otp) {
   const FAST2SMS_KEY = process.env.FAST2SMS_API_KEY;
+  const cleanPhone = String(phone).replace(/\D/g, "").slice(-10);
+  const message = encodeURIComponent(
+    `Your RoboManthan return OTP is: ${otp}. Valid for 5 minutes. Do not share.`
+  );
+
   if (!FAST2SMS_KEY) {
-    console.warn("FAST2SMS_API_KEY not set – OTP (dev only):", otp);
+    // No SMS key – print OTP to Render logs so admin can still verify manually
+    console.log(`\n========================================`);
+    console.log(`[OTP] Phone: ${cleanPhone} | OTP: ${otp}`);
+    console.log(`========================================\n`);
     return { success: true, dev: true };
   }
+
   try {
     const https = require("https");
-    const message = `Your RoboManthan return OTP is: ${otp}. Valid for 5 minutes. Do not share.`;
-    const payload = JSON.stringify({
-      route: "q",
-      message,
-      language: "english",
-      flash: 0,
-      numbers: phone.replace(/\D/g, "").slice(-10), // last 10 digits
-    });
+    const path = `/dev/bulkV2?route=q&message=${message}&language=english&flash=0&numbers=${cleanPhone}`;
+
     return await new Promise((resolve, reject) => {
       const req2 = https.request(
         {
           hostname: "www.fast2sms.com",
-          path: "/dev/bulkV2",
-          method: "POST",
+          path,
+          method: "GET",
           headers: {
             authorization: FAST2SMS_KEY,
-            "Content-Type": "application/json",
-            "Content-Length": Buffer.byteLength(payload),
+            "cache-control": "no-cache",
           },
         },
         (r) => {
           let data = "";
           r.on("data", (c) => (data += c));
           r.on("end", () => {
-            try { resolve(JSON.parse(data)); } catch { resolve({ return: false, raw: data }); }
+            try {
+              const parsed = JSON.parse(data);
+              console.log("Fast2SMS response:", JSON.stringify(parsed));
+              resolve(parsed);
+            } catch {
+              console.log("Fast2SMS raw response:", data);
+              resolve({ return: false, raw: data });
+            }
           });
         },
       );
-      req2.on("error", reject);
-      req2.write(payload);
+      req2.on("error", (err) => {
+        console.error("Fast2SMS request error:", err.message);
+        resolve({ success: false, error: err.message });
+      });
       req2.end();
     });
   } catch (err) {
@@ -1493,10 +1504,11 @@ app.post("/transactions/:id/return/request-otp", authenticateToken, async (req, 
     otpStore.set(transactionId, { otp, expiresAt, userId: req.user.id });
 
     // Send to fixed admin/owner number
-    const RETURN_PHONE = process.env.RETURN_OTP_PHONE || "9902536095";
-    await sendSmsOtp(RETURN_PHONE, otp);
+    const RETURN_PHONE = process.env.RETURN_OTP_PHONE || "9448039779";
+    const smsResult = await sendSmsOtp(RETURN_PHONE, otp);
+    console.log("SMS send result:", JSON.stringify(smsResult));
 
-    res.json({ success: true, message: "OTP sent to the registered mobile number. Valid for 5 minutes." });
+    res.json({ success: true, message: "OTP sent to the registered mobile number (+91 9448039779). Valid for 5 minutes." });
   } catch (err) {
     console.error("Error in /transactions/:id/return/request-otp", err);
     res.status(500).json({ success: false, message: "Server error" });

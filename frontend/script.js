@@ -1747,7 +1747,7 @@ async function returnMyTransaction(transactionId) {
       otpMsg.textContent = "";
       return;
     }
-    otpMsg.textContent = "An OTP has been sent to the registered mobile number (+91 99025 36095). Enter it below to confirm the return.";
+    otpMsg.textContent = "An OTP has been sent to the registered mobile number (+91 94480 39779). Enter it below to confirm the return.";
   } catch (err) {
     console.error(err);
     otpError.textContent = "Server error. Please try again.";
