@@ -129,7 +129,7 @@ function renderProducts(arr) {
           <div class="card-info">
             <p><b>ID:</b> ${p.productId}</p>
             <p><b>Name:</b> ${p.name}</p>
-            <p><b>Model:</b> ${p.model}</p>
+            <p><b>Description:</b> ${p.model}</p>
             <p><b>Stock:</b> ${p.stock}</p>
             ${p.rackNumber ? `<p><b>Rack:</b> ${p.rackNumber}</p>` : ""}
             ${p.description ? `<p>${p.description}</p>` : ""}
@@ -849,7 +849,7 @@ function updateProject() {
     container.innerHTML += `
       <div class="card">
         <h3>${item.name}</h3>
-        <p>Model: ${item.model}</p>
+        <p>Description: ${item.model}</p>
         <p>Quantity: ${item.quantity}</p>
         <button onclick="decQty(${item.productId})">-</button>
         <button onclick="incQty(${item.productId})">+</button>
@@ -1569,6 +1569,7 @@ function deleteProduct(productId) {
 
 // ---------- Direct issue/return workflow (customer-facing) ----------
 let currentTakeComponent = null;
+let allComponents = []; // cached for search/filter
 
 async function loadComponents() {
   const container = document.getElementById("componentsGrid");
@@ -1581,13 +1582,24 @@ async function loadComponents() {
       container.innerHTML = "<p>Could not load components.</p>";
       return;
     }
-    if (data.components.length === 0) {
-      container.innerHTML = "<p>No components available.</p>";
-      return;
-    }
-    container.innerHTML = data.components
-      .map(
-        (c) => `
+    allComponents = data.components; // store for search
+    renderComponentCards(allComponents);
+  } catch (err) {
+    console.error(err);
+    container.innerHTML = "<p>Error loading components.</p>";
+  }
+}
+
+function renderComponentCards(components) {
+  const container = document.getElementById("componentsGrid");
+  if (!container) return;
+  if (components.length === 0) {
+    container.innerHTML = "<p>No components found.</p>";
+    return;
+  }
+  container.innerHTML = components
+    .map(
+      (c) => `
         <div class="card">
           <img src="${c.image || ""}">
           <div style="flex:1">
@@ -1605,12 +1617,22 @@ async function loadComponents() {
           </div>
         </div>
       `,
-      )
-      .join("");
-  } catch (err) {
-    console.error(err);
-    container.innerHTML = "<p>Error loading components.</p>";
+    )
+    .join("");
+}
+
+function filterComponents() {
+  const query = (document.getElementById("customerSearchInput")?.value || "").toLowerCase().trim();
+  if (!query) {
+    renderComponentCards(allComponents);
+    return;
   }
+  const filtered = allComponents.filter(
+    (c) =>
+      (c.name || "").toLowerCase().includes(query) ||
+      (c.description || "").toLowerCase().includes(query),
+  );
+  renderComponentCards(filtered);
 }
 
 function openTakeComponentModal(productId, name, rackNumber, stock) {
@@ -1703,21 +1725,98 @@ async function loadMyTransactions() {
 }
 
 async function returnMyTransaction(transactionId) {
+  // Step 1: Request OTP first — do not process return yet
+  currentReturnTransactionId = transactionId;
+  const otpModal = document.getElementById("otpModal");
+  const otpInput = document.getElementById("otpInput");
+  const otpError = document.getElementById("otpError");
+  const otpMsg = document.getElementById("otpModalMessage");
+  otpInput.value = "";
+  otpError.textContent = "";
+  otpMsg.textContent = "Sending OTP to registered mobile number…";
+  otpModal.style.display = "flex";
+
   try {
-    const resp = await fetch(`${API_URL}/transactions/${transactionId}/return`, {
+    const resp = await fetch(`${API_URL}/transactions/${transactionId}/return/request-otp`, {
       method: "POST",
       headers: authHeaders(),
     });
     const result = await resp.json();
     if (!resp.ok || !result.success) {
-      alert(result.message || "Could not return component.");
+      otpError.textContent = result.message || "Could not send OTP.";
+      otpMsg.textContent = "";
       return;
     }
-    await loadMyTransactions();
-    await loadComponents();
+    otpMsg.textContent = "An OTP has been sent to the registered mobile number (+91 99025 36095). Enter it below to confirm the return.";
   } catch (err) {
     console.error(err);
-    alert("Server error. Please try again.");
+    otpError.textContent = "Server error. Please try again.";
+    otpMsg.textContent = "";
+  }
+}
+
+// OTP state
+let currentReturnTransactionId = null;
+
+function closeOtpModal() {
+  document.getElementById("otpModal").style.display = "none";
+  currentReturnTransactionId = null;
+}
+
+async function resendOtp() {
+  if (!currentReturnTransactionId) return;
+  const otpError = document.getElementById("otpError");
+  const otpMsg = document.getElementById("otpModalMessage");
+  otpError.textContent = "";
+  otpMsg.textContent = "Resending OTP…";
+  document.getElementById("otpInput").value = "";
+  try {
+    const resp = await fetch(`${API_URL}/transactions/${currentReturnTransactionId}/return/request-otp`, {
+      method: "POST",
+      headers: authHeaders(),
+    });
+    const result = await resp.json();
+    if (!resp.ok || !result.success) {
+      otpError.textContent = result.message || "Could not resend OTP.";
+      otpMsg.textContent = "";
+    } else {
+      otpMsg.textContent = "New OTP sent to the registered mobile number. Valid for 5 minutes.";
+    }
+  } catch (err) {
+    console.error(err);
+    otpError.textContent = "Server error. Please try again.";
+    otpMsg.textContent = "";
+  }
+}
+
+async function submitOtp() {
+  if (!currentReturnTransactionId) return;
+  const otp = document.getElementById("otpInput").value.trim();
+  const otpError = document.getElementById("otpError");
+  otpError.textContent = "";
+  if (!otp || otp.length !== 6) {
+    otpError.textContent = "Please enter the 6-digit OTP.";
+    return;
+  }
+  try {
+    const resp = await fetch(`${API_URL}/transactions/${currentReturnTransactionId}/return/verify-otp`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: JSON.stringify({ otp }),
+    });
+    const result = await resp.json();
+    if (!resp.ok || !result.success) {
+      otpError.textContent = result.message || "Incorrect OTP. Please try again.";
+      return;
+    }
+    // Success
+    closeOtpModal();
+    await loadMyTransactions();
+    await loadComponents();
+    alert("✅ Component returned successfully!");
+  } catch (err) {
+    console.error(err);
+    otpError.textContent = "Server error. Please try again.";
   }
 }
 

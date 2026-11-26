@@ -1,44 +1,45 @@
 body {
   font-family: Arial, sans-serif;
-
   margin: 0;
-
   padding: 20px;
-
   background: #f2f3f5;
-
   transition: 0.3s;
 }
 
 .navbar {
   display: flex;
-
   justify-content: space-between;
-
   align-items: center;
-
-  padding: 15px;
-
+  padding: 15px 20px;
   background: #131921;
-
   color: white;
-
   border-radius: 10px;
-
   margin-bottom: 25px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.navbar h1 {
+  margin: 0;
+  font-size: 1.3em;
+}
+
+.navbar > div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 h2 {
-  margin-top: 40px;
+  margin-top: 32px;
+  margin-bottom: 16px;
 }
 
 .products {
   display: flex;
-
   flex-wrap: wrap;
-
   gap: 25px;
-
   justify-content: center;
 }
 #issueFormContainer {
@@ -60,9 +61,10 @@ h2 {
   flex-direction: row;
   align-items: center;
   width: 100%;
-  padding: 12px;
+  padding: 12px 16px;
   gap: 16px;
   box-sizing: border-box;
+  margin-bottom: 10px;
 }
 
 .products.list .card img {
@@ -105,31 +107,22 @@ h2 {
 
 .card {
   width: 280px;
-
   background: white;
-
   padding: 15px;
-
   border-radius: 15px;
-
   box-shadow: 0px 3px 12px rgba(0, 0, 0, 0.15);
-
   transition: 0.3s;
 }
 
 .card:hover {
-  transform: translateY(-8px);
+  transform: translateY(-5px);
 }
 
 .card img {
   width: 180px;
-
   height: 180px;
-
   display: block;
-
   margin: auto;
-
   object-fit: contain;
 }
 
@@ -149,56 +142,147 @@ h2 {
 }
 
 button {
-  padding: 10px;
-
+  padding: 10px 14px;
   border: none;
-
   border-radius: 8px;
-
   cursor: pointer;
-
   background: #ff9900;
-
   font-weight: bold;
-
-  margin: 5px;
+  margin: 4px;
+  font-size: 14px;
+  transition: background 0.2s;
 }
 
 button:hover {
   background: #e68a00;
 }
 
-input {
+button:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  color: #888;
+}
+
+input, select {
   padding: 10px;
-
-  margin: 8px;
-
+  margin: 6px 0;
   border-radius: 8px;
+  border: 1px solid #ccc;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
 
-  border: 1px solid gray;
+input:focus, select:focus {
+  border-color: #ff9900;
+}
 
+input {
   width: 250px;
+}
+
+select {
+  width: 270px;
 }
 
 #issueForm {
   background: white;
-
   padding: 20px;
-
   border-radius: 15px;
-
   box-shadow: 0px 3px 10px rgba(0, 0, 0, 0.15);
 }
 
+/* ===== Customer Page Specific ===== */
+#componentsSection,
+#myTransactionsSection {
+  background: white;
+  border-radius: 12px;
+  padding: 20px 24px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  margin-bottom: 20px;
+}
+
+#componentsSection h2,
+#myTransactionsSection h2 {
+  margin-top: 0;
+  color: #131921;
+  border-bottom: 2px solid #ff9900;
+  padding-bottom: 8px;
+}
+
+/* Customer search bar */
+.customer-search-box {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.customer-search-box input {
+  width: 100%;
+  max-width: 500px;
+  padding: 12px 18px;
+  border-radius: 25px;
+  border: 1.5px solid #ddd;
+  font-size: 15px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  box-sizing: border-box;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  margin: 0;
+}
+
+.customer-search-box input:focus {
+  border-color: #ff9900;
+  box-shadow: 0 2px 12px rgba(255,153,0,0.2);
+  outline: none;
+}
+
+/* My Transactions table */
+#myTransactionsContainer table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+#myTransactionsContainer th,
+#myTransactionsContainer td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid #eee;
+  vertical-align: middle;
+}
+
+#myTransactionsContainer th {
+  background: #f7f7f7;
+  font-weight: bold;
+  color: #333;
+  white-space: nowrap;
+}
+
+#myTransactionsContainer tr:hover {
+  background: #fffbf2;
+}
+
+#myTransactionsContainer td button {
+  font-size: 12px;
+  padding: 6px 12px;
+  margin: 0;
+  background: #e74c3c;
+  color: white;
+  border-radius: 6px;
+}
+
+#myTransactionsContainer td button:hover {
+  background: #c0392b;
+}
+
+/* ===== Dark mode ===== */
 .dark {
   background: #121212;
-
   color: white;
 }
 
 .dark .card {
   background: #1e1e1e;
-
   color: white;
 }
 
@@ -209,10 +293,35 @@ input {
 .dark .navbar {
   background: black;
 }
+
+.dark #componentsSection,
+.dark #myTransactionsSection {
+  background: #1e1e1e;
+}
+
+.dark #myTransactionsContainer th {
+  background: #2a2a2a;
+  color: #eee;
+}
+
+.dark input,
+.dark select {
+  background: #2a2a2a;
+  color: white;
+  border-color: #555;
+}
+
+.dark .customer-search-box input {
+  background: #2a2a2a;
+  color: white;
+  border-color: #555;
+}
+
+/* ===== Admin search box ===== */
 .searchBox {
   display: flex;
   justify-content: center;
-  margin: 20px;
+  margin: 20px 0;
   gap: 10px;
   flex-wrap: wrap;
 }
@@ -229,28 +338,17 @@ input {
 }
 .low {
   color: orange;
-
   font-weight: bold;
 }
 
 .critical {
   color: red;
-
   font-weight: bold;
 }
 
 .healthy {
   color: green;
-
   font-weight: bold;
-}
-
-select {
-  padding: 10px;
-  margin: 8px;
-  border-radius: 8px;
-  border: 1px solid gray;
-  width: 270px;
 }
 
 .workshopTitle {
@@ -305,10 +403,24 @@ select {
 }
 .modal-content {
   background-color: #fff;
-  padding: 20px;
-  border-radius: 10px;
+  padding: 24px;
+  border-radius: 12px;
   width: 420px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  max-width: 95vw;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+}
+.modal-content label {
+  display: block;
+  font-weight: bold;
+  margin: 10px 0 4px;
+  font-size: 13px;
+  color: #333;
+}
+.modal-content input,
+.modal-content select {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0 0 4px 0;
 }
 .damaged-modal {
   /* allow a wider modal for tables, but constrain to viewport */
@@ -383,6 +495,11 @@ select {
   float: right;
   font-size: 24px;
   cursor: pointer;
+  line-height: 1;
+  color: #555;
+}
+.modal .close:hover {
+  color: #000;
 }
 
 #activeSession {
@@ -405,8 +522,9 @@ select {
   background: transparent;
   border: none;
   font-size: 18px;
-  margin-right: 8px;
+  margin-right: 4px;
   cursor: pointer;
+  padding: 6px;
 }
 .notif-bell .notif-count {
   display: inline-block;
@@ -455,10 +573,13 @@ select {
 .password-container {
   position: relative;
   display: inline-block;
+  width: 100%;
 }
 
 .password-container input {
   padding-right: 45px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .password-container button {
@@ -470,10 +591,12 @@ select {
   background: transparent;
   cursor: pointer;
   font-size: 18px;
+  margin: 0;
+  padding: 0;
 }
 
+/* ===== Responsive ===== */
 @media (max-width: 768px) {
-
   body {
     padding: 10px;
   }
@@ -481,7 +604,11 @@ select {
   .navbar {
     flex-direction: column;
     text-align: center;
-    gap: 15px;
+    gap: 10px;
+  }
+
+  .navbar > div {
+    justify-content: center;
   }
 
   .searchBox {
@@ -535,9 +662,39 @@ select {
     width: 95vw;
   }
 
+  #componentsSection,
+  #myTransactionsSection {
+    padding: 14px;
+  }
+
+  #myTransactionsContainer table {
+    font-size: 12px;
+  }
+
+  #myTransactionsContainer th,
+  #myTransactionsContainer td {
+    padding: 7px 6px;
+  }
+
+  .customer-search-box input {
+    max-width: 100%;
+  }
+
   /* Prevent accidental horizontal scrolling */
   html,
   body {
     overflow-x: hidden;
+  }
+}
+
+@media (max-width: 480px) {
+  #products {
+    grid-template-columns: 1fr !important;
+  }
+
+  #myTransactionsContainer th,
+  #myTransactionsContainer td {
+    font-size: 11px;
+    padding: 5px 4px;
   }
 }

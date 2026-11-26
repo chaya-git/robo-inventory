@@ -368,16 +368,26 @@
 
     <!-- ===== Direct Issue/Return Workflow ===== -->
 
-    <!-- Customer: Components grid -->
-    <div id="componentsSection" style="display: none; margin-top: 24px">
-      <h2>Components</h2>
-      <div id="componentsGrid" class="products list">Loading...</div>
-    </div>
-
-    <!-- Customer: My Transactions -->
+    <!-- Customer: My Transactions (Return section - moved to TOP) -->
     <div id="myTransactionsSection" style="display: none; margin-top: 24px">
       <h2>My Transactions</h2>
       <div id="myTransactionsContainer">Loading...</div>
+    </div>
+
+    <!-- Customer: Components grid -->
+    <div id="componentsSection" style="display: none; margin-top: 24px">
+      <h2>Components</h2>
+      <!-- Customer Search Bar -->
+      <div class="customer-search-box">
+        <input
+          type="text"
+          id="customerSearchInput"
+          placeholder="🔍 Search components by name or description..."
+          oninput="filterComponents()"
+          autocomplete="off"
+        />
+      </div>
+      <div id="componentsGrid" class="products list">Loading...</div>
     </div>
 
     <!-- Take Component Modal (customer) -->
@@ -536,6 +546,33 @@
             Save Transaction
           </button>
         </div>
+      </div>
+    </div>
+
+    <!-- OTP Verification Modal (Customer Return) -->
+    <div id="otpModal" class="modal" style="display: none">
+      <div class="modal-content" style="max-width: 400px; width: 95vw">
+        <span class="close" onclick="closeOtpModal()">&times;</span>
+        <h3>🔐 Verify Return OTP</h3>
+        <p id="otpModalMessage" style="color: #555; font-size: 14px; margin-bottom: 12px">
+          An OTP has been sent to the registered mobile number. Enter it below to confirm the return.
+        </p>
+        <label>Enter OTP</label>
+        <input
+          type="text"
+          id="otpInput"
+          placeholder="6-digit OTP"
+          maxlength="6"
+          inputmode="numeric"
+          pattern="[0-9]*"
+          style="width: 100%; box-sizing: border-box; font-size: 20px; letter-spacing: 6px; text-align: center"
+        />
+        <div id="otpError" style="color: #c0392b; margin-top: 8px; font-size: 13px"></div>
+        <div style="margin-top: 14px; display: flex; gap: 8px; flex-wrap: wrap">
+          <button onclick="submitOtp()" style="flex:1">✅ Verify & Return</button>
+          <button onclick="resendOtp()" style="flex:1; background:#6c757d">🔄 Resend OTP</button>
+        </div>
+        <p style="font-size:12px; color:#888; margin-top:10px">OTP expires in 5 minutes.</p>
       </div>
     </div>
 
