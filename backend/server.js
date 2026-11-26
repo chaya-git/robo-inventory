@@ -1432,8 +1432,8 @@ async function sendOtpEmail(otp) {
   const BREVO_API_KEY = process.env.BREVO_API_KEY;
   const SMTP_USER = process.env.OTP_SMTP_USER || process.env.OTP_GMAIL_USER;
   const SMTP_PASS = process.env.OTP_SMTP_PASS || process.env.OTP_GMAIL_PASS;
-  const ADMIN_EMAIL = process.env.OTP_ADMIN_EMAIL || "chayas008@gmail.com";
-  const FROM_EMAIL = process.env.OTP_FROM_EMAIL || ADMIN_EMAIL;
+  const ADMIN_EMAIL = process.env.OTP_ADMIN_EMAIL || "robomanthancontent@gmail.com";
+  const FROM_EMAIL = process.env.OTP_FROM_EMAIL || "chayas008@gmail.com";
   const SMTP_HOST = process.env.OTP_SMTP_HOST || "smtp-relay.brevo.com";
   const SMTP_PORT = Number(process.env.OTP_SMTP_PORT) || 587;
 
@@ -1573,7 +1573,8 @@ app.post("/transactions/:id/return/request-otp", authenticateToken, async (req, 
       });
     }
 
-    res.json({ success: true, message: "OTP sent to the registered email address (chayas008@gmail.com). Valid for 5 minutes." });
+    const recipientEmail = process.env.OTP_ADMIN_EMAIL || "robomanthancontent@gmail.com";
+    res.json({ success: true, message: `OTP sent to the registered email address (${recipientEmail}). Valid for 5 minutes.` });
   } catch (err) {
     console.error("Error in /transactions/:id/return/request-otp", err);
     res.status(500).json({ success: false, message: "Server error" });
