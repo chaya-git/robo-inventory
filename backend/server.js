@@ -1424,10 +1424,12 @@ app.get("/myTransactions", authenticateToken, async (req, res) => {
 const crypto = require("crypto");
 const otpStore = new Map(); // key: transactionId, value: { otp, expiresAt, userId }
 
-// Helper: send OTP via email (Brevo SMTP - free 300 emails/day, works from cloud servers)
+// Helper: send OTP via Brevo HTTP API (port 443, never blocked) or SMTP fallback
 async function sendOtpEmail(otp) {
   const nodemailer = require("nodemailer");
+  const https = require("https");
 
+  const BREVO_API_KEY = process.env.BREVO_API_KEY;
   const SMTP_USER = process.env.OTP_SMTP_USER || process.env.OTP_GMAIL_USER;
   const SMTP_PASS = process.env.OTP_SMTP_PASS || process.env.OTP_GMAIL_PASS;
   const ADMIN_EMAIL = process.env.OTP_ADMIN_EMAIL || "chayas008@gmail.com";
@@ -1440,8 +1442,72 @@ async function sendOtpEmail(otp) {
   console.log(`[OTP] Code: ${otp} | To: ${ADMIN_EMAIL}`);
   console.log(`========================================\n`);
 
+  const htmlContent = `
+    <div style="font-family:Arial,sans-serif;max-width:400px;margin:auto;border:1px solid #eee;border-radius:10px;padding:24px">
+      <h2 style="color:#131921;margin-bottom:4px">RoboManthan Inventory</h2>
+      <p style="color:#555;margin-top:0">Component Return Verification</p>
+      <hr style="border:none;border-top:1px solid #eee"/>
+      <p style="font-size:15px">Your OTP for returning a component is:</p>
+      <div style="background:#f7f7f7;border-radius:8px;padding:16px 24px;text-align:center;margin:16px 0">
+        <span style="font-size:36px;font-weight:bold;letter-spacing:10px;color:#ff9900">${otp}</span>
+      </div>
+      <p style="color:#888;font-size:13px">This OTP is valid for <b>5 minutes</b>. Do not share it.</p>
+    </div>
+  `;
+
+  // 1. Prefer Brevo HTTP API (port 443 HTTPS - never blocked on Render free tier)
+  if (BREVO_API_KEY) {
+    try {
+      const payload = JSON.stringify({
+        sender: { name: "RoboManthan Inventory", email: FROM_EMAIL },
+        to: [{ email: ADMIN_EMAIL }],
+        subject: `Return OTP: ${otp}`,
+        htmlContent,
+      });
+
+      const apiRes = await new Promise((resolve, reject) => {
+        const req2 = https.request(
+          {
+            hostname: "api.brevo.com",
+            path: "/v3/smtp/email",
+            method: "POST",
+            timeout: 10000,
+            headers: {
+              "api-key": BREVO_API_KEY,
+              "Content-Type": "application/json",
+              "Content-Length": Buffer.byteLength(payload),
+            },
+          },
+          (r) => {
+            let data = "";
+            r.on("data", (c) => (data += c));
+            r.on("end", () => resolve({ status: r.statusCode, body: data }));
+          },
+        );
+        req2.on("timeout", () => {
+          req2.destroy(new Error("Brevo API request timed out"));
+        });
+        req2.on("error", reject);
+        req2.write(payload);
+        req2.end();
+      });
+
+      if (apiRes.status >= 200 && apiRes.status < 300) {
+        console.log(`[OTP] Brevo API email sent successfully to ${ADMIN_EMAIL}`);
+        return { success: true };
+      } else {
+        console.error("[OTP] Brevo API error:", apiRes.status, apiRes.body);
+        return { success: false, error: `Brevo API error (${apiRes.status}): ${apiRes.body}` };
+      }
+    } catch (err) {
+      console.error("[OTP] Brevo API failed:", err.message);
+      return { success: false, error: err.message };
+    }
+  }
+
+  // 2. Fallback: SMTP via nodemailer (with strict 8s timeouts so it never hangs)
   if (!SMTP_USER || !SMTP_PASS) {
-    console.warn("[OTP] SMTP credentials not set – OTP printed to logs only.");
+    console.warn("[OTP] No BREVO_API_KEY or SMTP credentials set – OTP printed to logs only.");
     return { success: true, dev: true };
   }
 
@@ -1449,7 +1515,11 @@ async function sendOtpEmail(otp) {
     const transporter = nodemailer.createTransport({
       host: SMTP_HOST,
       port: SMTP_PORT,
-      secure: false,
+      secure: SMTP_PORT === 465,
+      connectionTimeout: 8000,
+      greetingTimeout: 8000,
+      socketTimeout: 8000,
+      tls: { rejectUnauthorized: false },
       auth: {
         user: SMTP_USER,
         pass: SMTP_PASS,
@@ -1460,24 +1530,13 @@ async function sendOtpEmail(otp) {
       from: `"RoboManthan Inventory" <${FROM_EMAIL}>`,
       to: ADMIN_EMAIL,
       subject: `Return OTP: ${otp}`,
-      html: `
-        <div style="font-family:Arial,sans-serif;max-width:400px;margin:auto;border:1px solid #eee;border-radius:10px;padding:24px">
-          <h2 style="color:#131921;margin-bottom:4px">RoboManthan Inventory</h2>
-          <p style="color:#555;margin-top:0">Component Return Verification</p>
-          <hr style="border:none;border-top:1px solid #eee"/>
-          <p style="font-size:15px">Your OTP for returning a component is:</p>
-          <div style="background:#f7f7f7;border-radius:8px;padding:16px 24px;text-align:center;margin:16px 0">
-            <span style="font-size:36px;font-weight:bold;letter-spacing:10px;color:#ff9900">${otp}</span>
-          </div>
-          <p style="color:#888;font-size:13px">This OTP is valid for <b>5 minutes</b>. Do not share it.</p>
-        </div>
-      `,
+      html: htmlContent,
     });
 
-    console.log(`[OTP] Email sent successfully to ${ADMIN_EMAIL}`);
+    console.log(`[OTP] SMTP email sent successfully to ${ADMIN_EMAIL}`);
     return { success: true };
   } catch (err) {
-    console.error("[OTP] Email send failed:", err.message);
+    console.error("[OTP] SMTP email send failed:", err.message);
     return { success: false, error: err.message };
   }
 }
@@ -1503,9 +1562,16 @@ app.post("/transactions/:id/return/request-otp", authenticateToken, async (req, 
     const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
     otpStore.set(transactionId, { otp, expiresAt, userId: req.user.id });
 
-    // Send OTP via Gmail email
-    const smsResult = await sendOtpEmail(otp);
-    console.log("OTP send result:", JSON.stringify(smsResult));
+    // Send OTP via email
+    const emailResult = await sendOtpEmail(otp);
+    console.log("OTP send result:", JSON.stringify(emailResult));
+
+    if (!emailResult.success) {
+      return res.status(500).json({
+        success: false,
+        message: `Failed to send OTP email: ${emailResult.error || "Unknown email error"}`,
+      });
+    }
 
     res.json({ success: true, message: "OTP sent to the registered email address (chayas008@gmail.com). Valid for 5 minutes." });
   } catch (err) {

@@ -1733,7 +1733,7 @@ async function returnMyTransaction(transactionId) {
   const otpMsg = document.getElementById("otpModalMessage");
   otpInput.value = "";
   otpError.textContent = "";
-  otpMsg.textContent = "Sending OTP to registered mobile number…";
+  otpMsg.textContent = "Sending OTP to chayas008@gmail.com...";
   otpModal.style.display = "flex";
 
   try {
