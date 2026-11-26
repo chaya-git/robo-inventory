@@ -1424,47 +1424,51 @@ app.get("/myTransactions", authenticateToken, async (req, res) => {
 const crypto = require("crypto");
 const otpStore = new Map(); // key: transactionId, value: { otp, expiresAt, userId }
 
-// Helper: send OTP via Gmail (free, no payment needed)
+// Helper: send OTP via email (Brevo SMTP - free 300 emails/day, works from cloud servers)
 async function sendOtpEmail(otp) {
   const nodemailer = require("nodemailer");
 
-  const GMAIL_USER = process.env.OTP_GMAIL_USER;   // your Gmail address
-  const GMAIL_PASS = process.env.OTP_GMAIL_PASS;   // Gmail App Password (16 chars)
-  const ADMIN_EMAIL = process.env.OTP_ADMIN_EMAIL || GMAIL_USER; // who receives the OTP
+  const SMTP_USER = process.env.OTP_SMTP_USER || process.env.OTP_GMAIL_USER;
+  const SMTP_PASS = process.env.OTP_SMTP_PASS || process.env.OTP_GMAIL_PASS;
+  const ADMIN_EMAIL = process.env.OTP_ADMIN_EMAIL || SMTP_USER;
+  const SMTP_HOST = process.env.OTP_SMTP_HOST || "smtp-relay.brevo.com";
+  const SMTP_PORT = Number(process.env.OTP_SMTP_PORT) || 587;
 
   // Always log OTP to Render console as a fallback
   console.log(`\n========================================`);
   console.log(`[OTP] Code: ${otp} | To: ${ADMIN_EMAIL}`);
   console.log(`========================================\n`);
 
-  if (!GMAIL_USER || !GMAIL_PASS) {
-    console.warn("[OTP] OTP_GMAIL_USER / OTP_GMAIL_PASS not set – OTP printed to logs only.");
+  if (!SMTP_USER || !SMTP_PASS) {
+    console.warn("[OTP] SMTP credentials not set – OTP printed to logs only.");
     return { success: true, dev: true };
   }
 
   try {
     const transporter = nodemailer.createTransport({
-      service: "gmail",
+      host: SMTP_HOST,
+      port: SMTP_PORT,
+      secure: false,
       auth: {
-        user: GMAIL_USER,
-        pass: GMAIL_PASS,
+        user: SMTP_USER,
+        pass: SMTP_PASS,
       },
     });
 
     await transporter.sendMail({
-      from: `"RoboManthan Inventory" <${GMAIL_USER}>`,
+      from: `"RoboManthan Inventory" <${SMTP_USER}>`,
       to: ADMIN_EMAIL,
-      subject: `🔐 Return OTP: ${otp}`,
+      subject: `Return OTP: ${otp}`,
       html: `
         <div style="font-family:Arial,sans-serif;max-width:400px;margin:auto;border:1px solid #eee;border-radius:10px;padding:24px">
-          <h2 style="color:#131921;margin-bottom:4px">🤖 RoboManthan Inventory</h2>
+          <h2 style="color:#131921;margin-bottom:4px">RoboManthan Inventory</h2>
           <p style="color:#555;margin-top:0">Component Return Verification</p>
           <hr style="border:none;border-top:1px solid #eee"/>
           <p style="font-size:15px">Your OTP for returning a component is:</p>
           <div style="background:#f7f7f7;border-radius:8px;padding:16px 24px;text-align:center;margin:16px 0">
             <span style="font-size:36px;font-weight:bold;letter-spacing:10px;color:#ff9900">${otp}</span>
           </div>
-          <p style="color:#888;font-size:13px">⏱ This OTP is valid for <b>5 minutes</b>. Do not share it.</p>
+          <p style="color:#888;font-size:13px">This OTP is valid for <b>5 minutes</b>. Do not share it.</p>
         </div>
       `,
     });
